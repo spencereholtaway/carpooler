@@ -1,25 +1,28 @@
+import { useState } from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { useProfile } from "./useProfile";
 import { useTrips } from "./useTrips";
 import { NewTripForm } from "./NewTripForm";
 import { TripCard } from "./TripCard";
+import { ProfileForm } from "./ProfileForm";
 import "./index.css";
 
-function Header() {
-  const { user, login, logout, loading } = useAuth();
-
+function Header({
+  name,
+  onEditProfile,
+}: {
+  name?: string;
+  onEditProfile?: () => void;
+}) {
   return (
     <header className="app-header">
       <h1>Carpooler</h1>
-      {!loading && (
+      {name && (
         <div className="auth-controls">
-          {user ? (
-            <>
-              <span>{user.displayName}</span>
-              <button onClick={logout}>Sign out</button>
-            </>
-          ) : (
-            <button onClick={login}>Sign in with Google</button>
-          )}
+          <span>{name}</span>
+          <button className="secondary" onClick={onEditProfile}>
+            Edit profile
+          </button>
         </div>
       )}
     </header>
@@ -28,37 +31,50 @@ function Header() {
 
 function TripsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading } = useProfile(user?.uid);
   const { trips, loading: tripsLoading } = useTrips();
+  const [editingProfile, setEditingProfile] = useState(false);
 
-  if (authLoading) return null;
+  if (authLoading || (user && profileLoading)) return null;
 
-  if (!user) {
+  if (!user) return null;
+
+  if (!profile || editingProfile) {
     return (
-      <main className="signed-out">
-        <p>Sign in with Google to see and post carpool trips.</p>
-      </main>
+      <>
+        <Header name={profile?.name} />
+        <main>
+          <ProfileForm
+            uid={user.uid}
+            existing={profile}
+            onSaved={() => setEditingProfile(false)}
+          />
+        </main>
+      </>
     );
   }
 
   return (
-    <main>
-      <NewTripForm />
-      <section className="trip-list">
-        <h2>Upcoming trips</h2>
-        {tripsLoading && <p>Loading trips...</p>}
-        {!tripsLoading && trips.length === 0 && <p>No trips posted yet.</p>}
-        {trips.map((trip) => (
-          <TripCard key={trip.id} trip={trip} />
-        ))}
-      </section>
-    </main>
+    <>
+      <Header name={profile.name} onEditProfile={() => setEditingProfile(true)} />
+      <main>
+        <NewTripForm profile={profile} />
+        <section className="trip-list">
+          <h2>Upcoming trips</h2>
+          {tripsLoading && <p>Loading trips...</p>}
+          {!tripsLoading && trips.length === 0 && <p>No trips posted yet.</p>}
+          {trips.map((trip) => (
+            <TripCard key={trip.id} trip={trip} profile={profile} />
+          ))}
+        </section>
+      </main>
+    </>
   );
 }
 
 function App() {
   return (
     <AuthProvider>
-      <Header />
       <TripsPage />
     </AuthProvider>
   );

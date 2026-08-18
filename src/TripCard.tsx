@@ -1,8 +1,8 @@
 import { useAuth } from "./AuthContext";
 import { deleteTrip, joinTrip, leaveTrip } from "./useTrips";
-import type { Trip } from "./types";
+import type { Profile, Trip } from "./types";
 
-export function TripCard({ trip }: { trip: Trip }) {
+export function TripCard({ trip, profile }: { trip: Trip; profile: Profile }) {
   const { user } = useAuth();
   if (!user) return null;
 
@@ -11,7 +11,7 @@ export function TripCard({ trip }: { trip: Trip }) {
   const seatsLeft = trip.seatsTotal - trip.riders.length;
   const full = seatsLeft <= 0;
 
-  const rider = { uid: user.uid, name: user.displayName ?? "Rider" };
+  const rider = { uid: user.uid, name: profile.name };
 
   return (
     <article className="trip-card">

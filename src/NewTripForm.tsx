@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthContext";
 import { createTrip } from "./useTrips";
+import type { Profile } from "./types";
 
-export function NewTripForm() {
+export function NewTripForm({ profile }: { profile: Profile }) {
   const { user } = useAuth();
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [departureTime, setDepartureTime] = useState("");
-  const [seatsTotal, setSeatsTotal] = useState(3);
+  const [seatsTotal, setSeatsTotal] = useState(profile.seats || 1);
   const [submitting, setSubmitting] = useState(false);
 
   if (!user) return null;
@@ -23,12 +24,12 @@ export function NewTripForm() {
         departureTime: new Date(departureTime).toISOString(),
         seatsTotal,
         driverId: user.uid,
-        driverName: user.displayName ?? "Driver",
+        driverName: profile.name,
       });
       setOrigin("");
       setDestination("");
       setDepartureTime("");
-      setSeatsTotal(3);
+      setSeatsTotal(profile.seats || 1);
     } finally {
       setSubmitting(false);
     }

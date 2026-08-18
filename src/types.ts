@@ -3,6 +3,12 @@ export type Rider = {
   name: string;
 };
 
+export type Profile = {
+  name: string;
+  seats: number; // seats they can offer when driving
+  kids: string; // free-text, e.g. "Ava, Sam"
+};
+
 export type Trip = {
   id: string;
   destination: string;

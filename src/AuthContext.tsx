@@ -1,12 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
-import { auth, googleProvider } from "./firebase";
+import { onAuthStateChanged, signInAnonymously, type User } from "firebase/auth";
+import { auth } from "./firebase";
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -16,22 +14,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setUser(u);
+        setLoading(false);
+      } else {
+        signInAnonymously(auth);
+      }
     });
+    return unsubscribe;
   }, []);
 
-  const login = async () => {
-    await signInWithPopup(auth, googleProvider);
-  };
-
-  const logout = async () => {
-    await signOut(auth);
-  };
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading }}>
       {children}
     </AuthContext.Provider>
   );
