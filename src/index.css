@@ -196,3 +196,85 @@ input {
   display: flex;
   gap: 8px;
 }
+
+/* --- fun placeholder hero page --- */
+
+#root:has(.hero-page) {
+  max-width: none;
+  padding: 0;
+  border-inline: none;
+}
+
+.hero-page {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #1c0f2e 0%, #0a0714 70%);
+}
+
+.hero-title {
+  position: relative;
+  z-index: 1;
+  font-family: "Space Grotesk", var(--sans);
+  font-weight: 700;
+  font-size: clamp(48px, 12vw, 140px);
+  letter-spacing: -0.04em;
+  margin: 0;
+  text-align: center;
+  background: linear-gradient(90deg, #c084fc, #f472b6, #60a5fa, #c084fc);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 6s ease-in-out infinite;
+  text-shadow: 0 0 80px rgba(192, 132, 252, 0.35);
+}
+
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.flying-cars {
+  position: absolute;
+  inset: 0;
+}
+
+.flying-car {
+  position: absolute;
+  left: 0;
+  animation-name: fly-right;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+}
+
+.flying-car.reverse {
+  animation-name: fly-left;
+}
+
+@keyframes fly-right {
+  from {
+    transform: translateX(-10vw) rotate(0deg);
+  }
+  to {
+    transform: translateX(110vw) rotate(0deg);
+  }
+}
+
+@keyframes fly-left {
+  from {
+    transform: translateX(110vw) scaleX(-1);
+  }
+  to {
+    transform: translateX(-10vw) scaleX(-1);
+  }
+}
