@@ -91,46 +91,58 @@ export function CarpoolDetail({
       </button>
       <h2>{carpool.name}</h2>
 
-      <div className="mini-form">
-        <div className="mini-form-header">
-          <h3>Schedule</h3>
-          {!editingSchedule && (
-            <button type="button" className="text-link" onClick={() => setEditingSchedule(true)}>
-              edit
-            </button>
-          )}
-        </div>
-        {editingSchedule ? (
-          <>
-            <div className="form-field">
-              <span className="gate-field-label">Day</span>
-              <select value={draftDay} onChange={(e) => setDraftDay(e.target.value as DayOfWeek)}>
-                {DAYS_OF_WEEK.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
+      {editingSchedule ? (
+        <form
+          className="profile-editor-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSchedule();
+          }}
+        >
+          <div className="mini-form">
+            <div className="mini-form-header">
+              <h3>Day</h3>
+              <button
+                type="button"
+                className="close-x"
+                onClick={() => setEditingSchedule(false)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
             </div>
-            <div className="field-row">
-              <div className="form-field street-field">
-                <span className="gate-field-label">Destination street</span>
-                <input
-                  value={draftDestStreet}
-                  onChange={(e) => setDraftDestStreet(e.target.value)}
-                />
-              </div>
-              <div className="form-field zip-field">
-                <span className="gate-field-label">Zip code</span>
-                <input
-                  value={draftDestZip}
-                  onChange={(e) => setDraftDestZip(e.target.value)}
-                  inputMode="numeric"
-                />
-              </div>
+            <select value={draftDay} onChange={(e) => setDraftDay(e.target.value as DayOfWeek)}>
+              {DAYS_OF_WEEK.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mini-form">
+            <h3>Destination</h3>
+            <div className="form-field">
+              <span className="gate-field-label">Street address</span>
+              <input
+                value={draftDestStreet}
+                onChange={(e) => setDraftDestStreet(e.target.value)}
+              />
             </div>
             <div className="form-field">
-              <span className="gate-field-label">Drop-off time</span>
+              <span className="gate-field-label">Zip code</span>
+              <input
+                value={draftDestZip}
+                onChange={(e) => setDraftDestZip(e.target.value)}
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+
+          <div className="mini-form">
+            <h3>Drop-off</h3>
+            <div className="form-field">
+              <span className="gate-field-label">Time</span>
               <input
                 type="time"
                 value={draftDropOffTime}
@@ -138,7 +150,7 @@ export function CarpoolDetail({
               />
             </div>
             <div className="form-field">
-              <span className="gate-field-label">Drop-off driver</span>
+              <span className="gate-field-label">Driver</span>
               <select value={draftDropOffDriver} onChange={(e) => setDraftDropOffDriver(e.target.value)}>
                 <option value="">Not assigned</option>
                 {carpool.members.map((m) => (
@@ -148,8 +160,12 @@ export function CarpoolDetail({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="mini-form">
+            <h3>Pick-up</h3>
             <div className="form-field">
-              <span className="gate-field-label">Pick-up time</span>
+              <span className="gate-field-label">Time</span>
               <input
                 type="time"
                 value={draftPickUpTime}
@@ -157,7 +173,7 @@ export function CarpoolDetail({
               />
             </div>
             <div className="form-field">
-              <span className="gate-field-label">Pick-up driver</span>
+              <span className="gate-field-label">Driver</span>
               <select value={draftPickUpDriver} onChange={(e) => setDraftPickUpDriver(e.target.value)}>
                 <option value="">Not assigned</option>
                 {carpool.members.map((m) => (
@@ -167,16 +183,22 @@ export function CarpoolDetail({
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              className="pill-button small"
-              onClick={saveSchedule}
-              disabled={savingSchedule}
-            >
-              {savingSchedule ? "Saving..." : "Save"}
+          </div>
+
+          <div className="floating-save-bar">
+            <button type="submit" className="pill-button" disabled={savingSchedule}>
+              {savingSchedule ? "Saving..." : "Save schedule"}
             </button>
-          </>
-        ) : (
+          </div>
+        </form>
+      ) : (
+        <div className="mini-form">
+          <div className="mini-form-header">
+            <h3>Schedule</h3>
+            <button type="button" className="text-link" onClick={() => setEditingSchedule(true)}>
+              edit
+            </button>
+          </div>
           <div className="schedule-summary">
             <p>
               <strong>{carpool.day ?? "No day set"}</strong>
@@ -203,8 +225,8 @@ export function CarpoolDetail({
               {carpool.pickUp?.driverId ? ` · ${driverName(carpool.pickUp.driverId)} driving` : ""}
             </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <h3>Members</h3>
       <ul className="member-list">

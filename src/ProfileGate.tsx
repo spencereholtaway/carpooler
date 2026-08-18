@@ -135,7 +135,9 @@ export function ProfileGate({
     <div className="gate-card pop-in">
       <span className="gate-step">Step 2 of 2</span>
       <h2 className="gate-heading">
-        {returning ? `Welcome back, ${name.trim()}.` : `Nice to meet you, ${name.trim()}.`}
+        {returning
+          ? `Welcome back, ${name.trim().split(" ")[0]}.`
+          : `Nice to meet you, ${name.trim().split(" ")[0]}.`}
       </h2>
       <p className="gate-sub">
         {returning
@@ -177,28 +179,26 @@ export function ProfileGate({
           {kidsError && <p className="form-error">{kidsError}</p>}
         </div>
 
-        <div className="field-row">
-          <div className="gate-field street-field">
-            <span className="gate-field-label">Street address</span>
-            <input
-              className="gate-input"
-              placeholder="123 Main St"
-              value={street}
-              onChange={(e) => setStreet(e.target.value)}
-              required
-            />
-          </div>
-          <div className="gate-field zip-field">
-            <span className="gate-field-label">Zip code</span>
-            <input
-              className="gate-input"
-              placeholder="94587"
-              value={zip}
-              onChange={(e) => setZip(e.target.value)}
-              inputMode="numeric"
-              required
-            />
-          </div>
+        <div className="gate-field">
+          <span className="gate-field-label">Street address</span>
+          <input
+            className="gate-input"
+            placeholder="123 Main St"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            required
+          />
+        </div>
+        <div className="gate-field">
+          <span className="gate-field-label">Zip code</span>
+          <input
+            className="gate-input"
+            placeholder="94587"
+            value={zip}
+            onChange={(e) => setZip(e.target.value)}
+            inputMode="numeric"
+            required
+          />
         </div>
 
         <div className="gate-field">

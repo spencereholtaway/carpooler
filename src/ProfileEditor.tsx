@@ -156,15 +156,13 @@ export function ProfileEditor({
 
         <div className="mini-form">
           <h3>Address</h3>
-          <div className="field-row">
-            <div className="form-field street-field">
-              <span className="gate-field-label">Street address</span>
-              <input value={street} onChange={(e) => setStreet(e.target.value)} />
-            </div>
-            <div className="form-field zip-field">
-              <span className="gate-field-label">Zip code</span>
-              <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
-            </div>
+          <div className="form-field">
+            <span className="gate-field-label">Street address</span>
+            <input value={street} onChange={(e) => setStreet(e.target.value)} />
+          </div>
+          <div className="form-field">
+            <span className="gate-field-label">Zip code</span>
+            <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
           </div>
         </div>
 

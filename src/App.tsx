@@ -5,6 +5,7 @@ import { ProfileGate } from "./ProfileGate";
 import { ProfileEditor } from "./ProfileEditor";
 import { CarpoolsPage } from "./CarpoolsPage";
 import { CarpoolDetail } from "./CarpoolDetail";
+import { AdminPage } from "./AdminPage";
 import type { Carpool } from "./types";
 
 // Apple's set draws these nose-left, except the race car which is nose-right;
@@ -59,6 +60,10 @@ function App() {
   const { profile, memberId, loading, saveProfile, clearProfile, adoptMemberId } = useProfile();
   const [selectedCarpool, setSelectedCarpool] = useState<Carpool | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+
+  if (window.location.pathname === "/admin") {
+    return <AdminPage />;
+  }
 
   if (loading) return null;
 

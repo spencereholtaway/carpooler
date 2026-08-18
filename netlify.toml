@@ -7,3 +7,11 @@
   targetPort = 5173
   port = 8888
   autoLaunch = false
+
+# Narrow, single-path redirect (not a "/*" catch-all — that broke asset/function
+# routing under `netlify dev` earlier) so a direct visit to /admin still loads
+# the SPA instead of hitting Netlify's static-file 404.
+[[redirects]]
+  from = "/admin"
+  to = "/index.html"
+  status = 200

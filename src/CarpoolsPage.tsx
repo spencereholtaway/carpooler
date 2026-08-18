@@ -203,27 +203,30 @@ export function CarpoolsPage({
             )}
 
             {openForm?.kid === group.kid && openForm.type === "create" && (
-              <form className="mini-form pop-in" onSubmit={handleCreate}>
-                <div className="mini-form-header">
-                  <h3>Start a carpool for {group.kid}</h3>
-                  <button
-                    type="button"
-                    className="close-x"
-                    onClick={() => setOpenForm(null)}
-                    aria-label="Close"
-                  >
-                    &times;
-                  </button>
+              <form className="profile-editor-form pop-in" onSubmit={handleCreate}>
+                <div className="mini-form">
+                  <div className="mini-form-header">
+                    <h3>Start a carpool for {group.kid}</h3>
+                    <button
+                      type="button"
+                      className="close-x"
+                      onClick={() => setOpenForm(null)}
+                      aria-label="Close"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                  <input
+                    ref={createInputRef}
+                    placeholder="e.g. Lincoln Elementary mornings"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    required
+                  />
                 </div>
-                <input
-                  ref={createInputRef}
-                  placeholder="e.g. Lincoln Elementary mornings"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  required
-                />
-                <div className="form-field">
-                  <span className="gate-field-label">Day</span>
+
+                <div className="mini-form">
+                  <h3>Day</h3>
                   <select value={day} onChange={(e) => setDay(e.target.value as DayOfWeek)}>
                     {DAYS_OF_WEEK.map((d) => (
                       <option key={d} value={d}>
@@ -232,12 +235,14 @@ export function CarpoolsPage({
                     ))}
                   </select>
                 </div>
-                <div className="field-row">
-                  <div className="form-field street-field">
-                    <span className="gate-field-label">Destination street</span>
+
+                <div className="mini-form">
+                  <h3>Destination</h3>
+                  <div className="form-field">
+                    <span className="gate-field-label">Street address</span>
                     <input value={destStreet} onChange={(e) => setDestStreet(e.target.value)} />
                   </div>
-                  <div className="form-field zip-field">
+                  <div className="form-field">
                     <span className="gate-field-label">Zip code</span>
                     <input
                       value={destZip}
@@ -246,27 +251,30 @@ export function CarpoolsPage({
                     />
                   </div>
                 </div>
-                <div className="field-row">
-                  <div className="form-field">
-                    <span className="gate-field-label">Drop-off time</span>
-                    <input
-                      type="time"
-                      value={dropOffTime}
-                      onChange={(e) => setDropOffTime(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-field">
-                    <span className="gate-field-label">Pick-up time</span>
-                    <input
-                      type="time"
-                      value={pickUpTime}
-                      onChange={(e) => setPickUpTime(e.target.value)}
-                    />
-                  </div>
+
+                <div className="mini-form">
+                  <h3>Drop-off time</h3>
+                  <input
+                    type="time"
+                    value={dropOffTime}
+                    onChange={(e) => setDropOffTime(e.target.value)}
+                  />
                 </div>
-                <button type="submit" className="pill-button" disabled={creating}>
-                  {creating ? "Creating..." : "Create"}
-                </button>
+
+                <div className="mini-form">
+                  <h3>Pick-up time</h3>
+                  <input
+                    type="time"
+                    value={pickUpTime}
+                    onChange={(e) => setPickUpTime(e.target.value)}
+                  />
+                </div>
+
+                <div className="floating-save-bar">
+                  <button type="submit" className="pill-button" disabled={creating}>
+                    {creating ? "Creating..." : "Create carpool"}
+                  </button>
+                </div>
               </form>
             )}
           </section>
