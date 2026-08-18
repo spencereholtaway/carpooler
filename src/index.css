@@ -59,6 +59,7 @@ p {
 }
 
 input {
+  width: 100%;
   font: inherit;
   padding: 10px 14px;
   border: 1px solid var(--border);
@@ -74,6 +75,7 @@ input:focus {
 }
 
 select {
+  width: 100%;
   font: inherit;
   padding: 10px 36px 10px 14px;
   border: 1px solid var(--border);
