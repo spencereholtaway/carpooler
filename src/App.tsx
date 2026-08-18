@@ -1,7 +1,7 @@
 import "./index.css";
 
-// Each emoji has a fixed drawn facing direction (Apple's set draws these
-// nose-left, race car nose-right) - cars only ever drive that way.
+// Apple's set draws these nose-left, except the race car which is nose-right;
+// flip that one so every car visually faces the direction it's driving.
 const CARS: { emoji: string; facing: "left" | "right" }[] = [
   { emoji: "🚗", facing: "left" },
   { emoji: "🚙", facing: "left" },
@@ -22,7 +22,7 @@ function FlyingCars() {
         return (
           <span
             key={i}
-            className={`flying-car ${car.facing === "left" ? "drives-left" : "drives-right"}`}
+            className="flying-car"
             style={{
               top: `${top}vh`,
               fontSize: `clamp(${size * 0.6}px, ${size / 10}vw, ${size}px)`,
@@ -30,7 +30,9 @@ function FlyingCars() {
               animationDelay: `${delay}s`,
             }}
           >
-            {car.emoji}
+            <span className={car.facing === "right" ? "flip" : ""}>
+              {car.emoji}
+            </span>
           </span>
         );
       })}
