@@ -58,6 +58,13 @@ export async function saveServerProfile(memberId: string, profile: LocalProfile)
   });
 }
 
+export async function getServerProfile(memberId: string): Promise<Omit<LocalProfile, "name"> | null> {
+  const res = await fetch(`/api/profile?memberId=${encodeURIComponent(memberId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getHousehold(
   memberId: string
 ): Promise<{ code: string; coParentId: string | null; coParentName: string | null }> {

@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { claimName, linkHousehold, listCarpools } from "./api";
+import { claimName, getServerProfile, linkHousehold } from "./api";
 import type { LocalProfile } from "./useProfile";
 
 export function ProfileGate({
@@ -37,13 +37,11 @@ export function ProfileGate({
       if (result.recovered) {
         onRecoverMemberId(result.memberId);
         setReturning(true);
-        // Try to prefill seats/kids from a carpool this person already
-        // belongs to, so "logging back in" doesn't mean retyping everything.
+        // Prefill from their actual saved profile, not a carpool membership
+        // snapshot — a carpool only ever has the subset of kids assigned to
+        // it, not the full roster.
         try {
-          const carpools = await listCarpools(result.memberId);
-          const known = carpools
-            .flatMap((c) => c.members)
-            .find((m) => m.id === result.memberId);
+          const known = await getServerProfile(result.memberId);
           if (known) {
             setSeats(known.seats);
             setKids(known.kids);
@@ -51,7 +49,7 @@ export function ProfileGate({
             setZip(known.zip);
           }
         } catch {
-          // No prior carpools to recover from — fine, they'll just fill it in.
+          // No prior profile to recover from — fine, they'll just fill it in.
         }
       } else {
         setReturning(false);
