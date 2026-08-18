@@ -1,29 +1,36 @@
 import "./index.css";
 
-const CARS = ["🚗", "🚙", "🚕", "🚓", "🏎️"];
+// Each emoji has a fixed drawn facing direction (Apple's set draws these
+// nose-left, race car nose-right) - cars only ever drive that way.
+const CARS: { emoji: string; facing: "left" | "right" }[] = [
+  { emoji: "🚗", facing: "left" },
+  { emoji: "🚙", facing: "left" },
+  { emoji: "🚕", facing: "left" },
+  { emoji: "🚓", facing: "left" },
+  { emoji: "🏎️", facing: "right" },
+];
 
 function FlyingCars() {
   return (
     <div className="flying-cars" aria-hidden="true">
       {Array.from({ length: 14 }).map((_, i) => {
-        const emoji = CARS[i % CARS.length];
+        const car = CARS[i % CARS.length];
         const top = Math.random() * 100;
-        const duration = 8 + Math.random() * 10;
+        const duration = 10 + Math.random() * 10;
         const delay = Math.random() * -20;
-        const size = 24 + Math.random() * 32;
-        const reverse = i % 2 === 0;
+        const size = 20 + Math.random() * 24;
         return (
           <span
             key={i}
-            className={`flying-car ${reverse ? "reverse" : ""}`}
+            className={`flying-car ${car.facing === "left" ? "drives-left" : "drives-right"}`}
             style={{
               top: `${top}vh`,
-              fontSize: `${size}px`,
+              fontSize: `clamp(${size * 0.6}px, ${size / 10}vw, ${size}px)`,
               animationDuration: `${duration}s`,
               animationDelay: `${delay}s`,
             }}
           >
-            {emoji}
+            {car.emoji}
           </span>
         );
       })}

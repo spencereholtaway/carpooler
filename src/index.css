@@ -208,11 +208,14 @@ input {
 .hero-page {
   position: relative;
   min-height: 100svh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 40%, #1c0f2e 0%, #0a0714 70%);
+  background: linear-gradient(180deg, #faf7ff 0%, #f1ecfb 100%);
+  padding: 24px;
+  box-sizing: border-box;
 }
 
 .hero-title {
@@ -220,17 +223,17 @@ input {
   z-index: 1;
   font-family: "Space Grotesk", var(--sans);
   font-weight: 700;
-  font-size: clamp(48px, 12vw, 140px);
+  font-size: clamp(36px, 11vw, 130px);
   letter-spacing: -0.04em;
   margin: 0;
   text-align: center;
-  background: linear-gradient(90deg, #c084fc, #f472b6, #60a5fa, #c084fc);
+  max-width: 100%;
+  background: linear-gradient(90deg, #7c3aed, #db2777, #2563eb, #7c3aed);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   animation: gradient-shift 6s ease-in-out infinite;
-  text-shadow: 0 0 80px rgba(192, 132, 252, 0.35);
 }
 
 @keyframes gradient-shift {
@@ -251,30 +254,35 @@ input {
 .flying-car {
   position: absolute;
   left: 0;
-  animation-name: fly-right;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.15));
 }
 
-.flying-car.reverse {
-  animation-name: fly-left;
+/* Drawn facing left (nose-left): drive right-to-left, the way it's facing. */
+.flying-car.drives-left {
+  animation-name: fly-to-left;
 }
 
-@keyframes fly-right {
+/* Drawn facing right (nose-right, e.g. the race car): drive left-to-right. */
+.flying-car.drives-right {
+  animation-name: fly-to-right;
+}
+
+@keyframes fly-to-left {
   from {
-    transform: translateX(-10vw) rotate(0deg);
+    transform: translateX(110vw);
   }
   to {
-    transform: translateX(110vw) rotate(0deg);
+    transform: translateX(-10vw);
   }
 }
 
-@keyframes fly-left {
+@keyframes fly-to-right {
   from {
-    transform: translateX(110vw) scaleX(-1);
+    transform: translateX(-10vw);
   }
   to {
-    transform: translateX(-10vw) scaleX(-1);
+    transform: translateX(110vw);
   }
 }
