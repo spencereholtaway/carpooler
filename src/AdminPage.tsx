@@ -24,6 +24,10 @@ type AdminCarpool = {
 };
 
 export function AdminPage() {
+  useEffect(() => {
+    document.title = "Admin | Blisspool";
+  }, []);
+
   const [key, setKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
   const [keyInput, setKeyInput] = useState("");
   const [tab, setTab] = useState<"users" | "carpools">("users");
