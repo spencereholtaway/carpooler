@@ -379,6 +379,7 @@ button {
 .seat-stepper {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 18px;
 }
 
@@ -934,6 +935,29 @@ button {
   cursor: pointer;
 }
 
+.car-assign-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.car-assign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.car-assign-row span {
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.car-assign-row select {
+  width: auto;
+  min-width: 140px;
+}
+
 /* --- admin: deliberately plain/generic, not the app's ethereal look --- */
 
 .admin-login {
@@ -1106,4 +1130,38 @@ button {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   color: #6b7280;
+}
+
+.admin-add-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.admin-add-row input {
+  flex: 1;
+  min-width: 100px;
+}
+
+.admin-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 2px 6px 2px 8px;
+  margin: 2px 4px 2px 0;
+  font-size: 12px;
+}
+
+.admin-chip-remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
 }

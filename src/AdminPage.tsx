@@ -11,14 +11,21 @@ type AdminUser = {
   zip: string;
 };
 
-type AdminMember = { id: string; name: string; seats: number; kids: string[]; isDriving: boolean };
+type AdminMember = {
+  id: string;
+  name: string;
+  seats: number;
+  kids: string[];
+  canDriveDropOff: boolean;
+  canDrivePickUp: boolean;
+};
 type AdminCarpool = {
   code: string;
   name: string;
   day: string;
   destination?: { street: string; zip: string };
-  dropOff?: { time: string; driverId: string | null };
-  pickUp?: { time: string; driverId: string | null };
+  dropOff?: { time: string; cars: { driverId: string; kids: string[] }[] };
+  pickUp?: { time: string; cars: { driverId: string; kids: string[] }[] };
   members: AdminMember[];
   createdAt: number;
 };
@@ -70,6 +77,84 @@ export function AdminPage() {
     load(keyInput.trim());
   };
 
+  const callAdmin = async (action: string, payload: unknown) => {
+    const res = await fetch("/api/admin/data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, action, payload }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    await load(key);
+  };
+
+  const [newUser, setNewUser] = useState({ name: "", seats: "1", kids: "", street: "", zip: "" });
+  const [addingUser, setAddingUser] = useState(false);
+  const createUser = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newUser.name.trim()) return;
+    setAddingUser(true);
+    try {
+      await callAdmin("createUser", {
+        name: newUser.name.trim(),
+        seats: Number(newUser.seats) || 0,
+        kids: newUser.kids.split(",").map((k) => k.trim()).filter(Boolean),
+        street: newUser.street,
+        zip: newUser.zip,
+      });
+      setNewUser({ name: "", seats: "1", kids: "", street: "", zip: "" });
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [userDraft, setUserDraft] = useState<AdminUser | null>(null);
+  const startEditUser = (u: AdminUser) => {
+    setEditingUser(u.memberId);
+    setUserDraft({ ...u });
+  };
+  const saveUser = async () => {
+    if (!userDraft) return;
+    await callAdmin("updateUser", {
+      memberId: userDraft.memberId,
+      name: userDraft.name,
+      seats: Number(userDraft.seats) || 0,
+      kids: userDraft.kids,
+      street: userDraft.street,
+      zip: userDraft.zip,
+    });
+    setEditingUser(null);
+  };
+  const deleteUser = async (memberId: string) => {
+    if (!confirm("Delete this user? This removes them from any carpools too.")) return;
+    await callAdmin("deleteUser", { memberId });
+  };
+
+  const [editingCarpool, setEditingCarpool] = useState<string | null>(null);
+  const [carpoolDraft, setCarpoolDraft] = useState<AdminCarpool | null>(null);
+  const startEditCarpool = (c: AdminCarpool) => {
+    setEditingCarpool(c.code);
+    setCarpoolDraft({ ...c, destination: { ...(c.destination ?? { street: "", zip: "" }) } });
+  };
+  const saveCarpool = async () => {
+    if (!carpoolDraft) return;
+    await callAdmin("updateCarpool", {
+      code: carpoolDraft.code,
+      name: carpoolDraft.name,
+      day: carpoolDraft.day,
+      destination: carpoolDraft.destination,
+    });
+    setEditingCarpool(null);
+  };
+  const deleteCarpool = async (code: string) => {
+    if (!confirm("Delete this carpool entirely?")) return;
+    await callAdmin("deleteCarpool", { code });
+  };
+  const removeMember = async (code: string, memberId: string) => {
+    if (!confirm("Remove this member from the carpool?")) return;
+    await callAdmin("removeMember", { code, memberId });
+  };
+
   if (!key) {
     return (
       <div className="admin-login">
@@ -114,6 +199,37 @@ export function AdminPage() {
 
         {!loading && tab === "users" && (
           <div className="admin-table-wrap">
+            <form className="admin-add-row" onSubmit={createUser}>
+              <input
+                placeholder="Name"
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+              />
+              <input
+                placeholder="Kids (comma separated)"
+                value={newUser.kids}
+                onChange={(e) => setNewUser({ ...newUser, kids: e.target.value })}
+              />
+              <input
+                type="number"
+                placeholder="Seats"
+                value={newUser.seats}
+                onChange={(e) => setNewUser({ ...newUser, seats: e.target.value })}
+              />
+              <input
+                placeholder="Street"
+                value={newUser.street}
+                onChange={(e) => setNewUser({ ...newUser, street: e.target.value })}
+              />
+              <input
+                placeholder="Zip"
+                value={newUser.zip}
+                onChange={(e) => setNewUser({ ...newUser, zip: e.target.value })}
+              />
+              <button type="submit" disabled={addingUser}>
+                {addingUser ? "Adding..." : "Add user"}
+              </button>
+            </form>
             <table className="admin-table">
               <thead>
                 <tr>
@@ -123,19 +239,70 @@ export function AdminPage() {
                   <th>Street</th>
                   <th>Zip</th>
                   <th>Member ID</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.memberId}>
-                    <td>{u.name}</td>
-                    <td>{u.kids?.join(", ") || "—"}</td>
-                    <td>{u.seats}</td>
-                    <td>{u.street || "—"}</td>
-                    <td>{u.zip || "—"}</td>
-                    <td className="admin-mono">{u.memberId}</td>
-                  </tr>
-                ))}
+                {users.map((u) =>
+                  editingUser === u.memberId && userDraft ? (
+                    <tr key={u.memberId}>
+                      <td>
+                        <input
+                          value={userDraft.name}
+                          onChange={(e) => setUserDraft({ ...userDraft, name: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={userDraft.kids.join(", ")}
+                          onChange={(e) =>
+                            setUserDraft({
+                              ...userDraft,
+                              kids: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={userDraft.seats}
+                          onChange={(e) => setUserDraft({ ...userDraft, seats: Number(e.target.value) })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={userDraft.street}
+                          onChange={(e) => setUserDraft({ ...userDraft, street: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={userDraft.zip}
+                          onChange={(e) => setUserDraft({ ...userDraft, zip: e.target.value })}
+                        />
+                      </td>
+                      <td className="admin-mono">{u.memberId}</td>
+                      <td>
+                        <button onClick={saveUser}>Save</button>{" "}
+                        <button onClick={() => setEditingUser(null)}>Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={u.memberId}>
+                      <td>{u.name}</td>
+                      <td>{u.kids?.join(", ") || "—"}</td>
+                      <td>{u.seats}</td>
+                      <td>{u.street || "—"}</td>
+                      <td>{u.zip || "—"}</td>
+                      <td className="admin-mono">{u.memberId}</td>
+                      <td>
+                        <button onClick={() => startEditUser(u)}>Edit</button>{" "}
+                        <button onClick={() => deleteUser(u.memberId)}>Delete</button>
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -153,24 +320,89 @@ export function AdminPage() {
                   <th>Pick-up</th>
                   <th>Members</th>
                   <th>Code</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {carpools.map((c) => (
-                  <tr key={c.code}>
-                    <td>{c.name}</td>
-                    <td>{c.day ?? "—"}</td>
-                    <td>
-                      {c.destination?.street
-                        ? `${c.destination.street}, ${c.destination.zip}`
-                        : "—"}
-                    </td>
-                    <td>{c.dropOff?.time || "—"}</td>
-                    <td>{c.pickUp?.time || "—"}</td>
-                    <td>{c.members.map((m) => m.name).join(", ")}</td>
-                    <td className="admin-mono">{c.code}</td>
-                  </tr>
-                ))}
+                {carpools.map((c) =>
+                  editingCarpool === c.code && carpoolDraft ? (
+                    <tr key={c.code}>
+                      <td>
+                        <input
+                          value={carpoolDraft.name}
+                          onChange={(e) => setCarpoolDraft({ ...carpoolDraft, name: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={carpoolDraft.day}
+                          onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          placeholder="Street"
+                          value={carpoolDraft.destination?.street ?? ""}
+                          onChange={(e) =>
+                            setCarpoolDraft({
+                              ...carpoolDraft,
+                              destination: { street: e.target.value, zip: carpoolDraft.destination?.zip ?? "" },
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Zip"
+                          value={carpoolDraft.destination?.zip ?? ""}
+                          onChange={(e) =>
+                            setCarpoolDraft({
+                              ...carpoolDraft,
+                              destination: { street: carpoolDraft.destination?.street ?? "", zip: e.target.value },
+                            })
+                          }
+                        />
+                      </td>
+                      <td>{c.dropOff?.time || "—"}</td>
+                      <td>{c.pickUp?.time || "—"}</td>
+                      <td>{c.members.map((m) => m.name).join(", ")}</td>
+                      <td className="admin-mono">{c.code}</td>
+                      <td>
+                        <button onClick={saveCarpool}>Save</button>{" "}
+                        <button onClick={() => setEditingCarpool(null)}>Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={c.code}>
+                      <td>{c.name}</td>
+                      <td>{c.day ?? "—"}</td>
+                      <td>
+                        {c.destination?.street
+                          ? `${c.destination.street}, ${c.destination.zip}`
+                          : "—"}
+                      </td>
+                      <td>{c.dropOff?.time || "—"}</td>
+                      <td>{c.pickUp?.time || "—"}</td>
+                      <td>
+                        {c.members.map((m) => (
+                          <span key={m.id} className="admin-member-chip">
+                            {m.name}{" "}
+                            <button
+                              className="admin-chip-remove"
+                              title="Remove from carpool"
+                              onClick={() => removeMember(c.code, m.id)}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </td>
+                      <td className="admin-mono">{c.code}</td>
+                      <td>
+                        <button onClick={() => startEditCarpool(c)}>Edit</button>{" "}
+                        <button onClick={() => deleteCarpool(c.code)}>Delete</button>
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>

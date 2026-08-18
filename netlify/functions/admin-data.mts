@@ -7,11 +7,13 @@ type Member = {
   name: string;
   seats: number;
   kids: string[];
-  isDriving: boolean;
+  canDriveDropOff: boolean;
+  canDrivePickUp: boolean;
   street: string;
   zip: string;
 };
-type Leg = { time: string; driverId: string | null };
+type Car = { driverId: string; kids: string[] };
+type Leg = { time: string; cars: Car[] };
 type Address = { street: string; zip: string };
 type Carpool = {
   code: string;
@@ -24,14 +26,95 @@ type Carpool = {
   createdAt: number;
 };
 
+async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId: string, code: string) {
+  const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+  await store.setJSON(`member:${memberId}`, codes.filter((c) => c !== code));
+}
+
+function dropMember(carpool: Carpool, memberId: string) {
+  carpool.members = carpool.members.filter((m) => m.id !== memberId);
+  carpool.dropOff.cars = carpool.dropOff.cars.filter((c) => c.driverId !== memberId);
+  carpool.pickUp.cars = carpool.pickUp.cars.filter((c) => c.driverId !== memberId);
+}
+
+async function handleMutation(store: ReturnType<typeof getStore>, req: Request) {
+  const body = (await req.json()) as { key: string; action: string; payload: any };
+  const expected = process.env.ADMIN_KEY;
+  if (!expected || body.key !== expected) return new Response("Unauthorized", { status: 401 });
+
+  switch (body.action) {
+    case "createUser": {
+      const { name, seats, kids, street, zip } = body.payload;
+      const memberId = crypto.randomUUID();
+      const profile: ServerProfile = { name, seats: Number(seats) || 0, kids: kids ?? [], street, zip };
+      await store.setJSON(`profile:${memberId}`, profile);
+      await store.setJSON(`member:${memberId}`, []);
+      return new Response(JSON.stringify({ memberId }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    case "updateUser": {
+      const { memberId, name, seats, kids, street, zip } = body.payload;
+      const profile: ServerProfile = { name, seats, kids, street, zip };
+      await store.setJSON(`profile:${memberId}`, profile);
+      return new Response("ok");
+    }
+    case "deleteUser": {
+      const { memberId } = body.payload;
+      const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+      for (const code of codes) {
+        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        if (!carpool) continue;
+        dropMember(carpool, memberId);
+        await store.setJSON(`code:${code}`, carpool);
+      }
+      await store.delete(`profile:${memberId}`);
+      await store.delete(`member:${memberId}`);
+      return new Response("ok");
+    }
+    case "updateCarpool": {
+      const { code, name, day, destination } = body.payload;
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      carpool.name = name;
+      carpool.day = day;
+      carpool.destination = destination;
+      await store.setJSON(`code:${code}`, carpool);
+      return new Response("ok");
+    }
+    case "deleteCarpool": {
+      const { code } = body.payload;
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (carpool) {
+        for (const m of carpool.members) await removeCodeFromMember(store, m.id, code);
+      }
+      await store.delete(`code:${code}`);
+      return new Response("ok");
+    }
+    case "removeMember": {
+      const { code, memberId } = body.payload;
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      dropMember(carpool, memberId);
+      await store.setJSON(`code:${code}`, carpool);
+      await removeCodeFromMember(store, memberId, code);
+      return new Response("ok");
+    }
+    default:
+      return new Response("Unknown action", { status: 400 });
+  }
+}
+
 export default async (req: Request) => {
+  const store = getStore("carpools");
+
+  if (req.method === "POST") return handleMutation(store, req);
+
   const expected = process.env.ADMIN_KEY;
   const key = new URL(req.url).searchParams.get("key");
   if (!expected || key !== expected) {
     return new Response("Unauthorized", { status: 401 });
   }
-
-  const store = getStore("carpools");
 
   const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
   const users = (

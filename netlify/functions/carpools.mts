@@ -6,12 +6,14 @@ type Member = {
   name: string;
   seats: number;
   kids: string[];
-  isDriving: boolean;
+  canDriveDropOff: boolean;
+  canDrivePickUp: boolean;
   street: string;
   zip: string;
 };
 type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
-type Leg = { time: string; driverId: string | null };
+type Car = { driverId: string; kids: string[] };
+type Leg = { time: string; cars: Car[] };
 type Address = { street: string; zip: string };
 type Carpool = {
   code: string;
@@ -29,8 +31,8 @@ function randomCode() {
 }
 
 // If this member has a linked co-parent who shares one of the kids just
-// assigned, add the co-parent too — but never mark them as driving, that's
-// always a separate, explicit choice each person makes for themselves.
+// assigned, add the co-parent too — but never mark them as able to drive,
+// that's always a separate, explicit choice each person makes for themselves.
 async function autoAddCoParent(
   store: ReturnType<typeof getStore>,
   carpool: Carpool,
@@ -51,7 +53,8 @@ async function autoAddCoParent(
     name: coProfile.name,
     seats: coProfile.seats,
     kids: sharedKids,
-    isDriving: false,
+    canDriveDropOff: false,
+    canDrivePickUp: false,
     street: coProfile.street,
     zip: coProfile.zip,
   });
@@ -102,8 +105,8 @@ export default async (req: Request) => {
       name,
       day,
       destination: destination ?? { street: "", zip: "" },
-      dropOff: dropOff ?? { time: "", driverId: null },
-      pickUp: pickUp ?? { time: "", driverId: null },
+      dropOff: { time: dropOff?.time ?? "", cars: [] },
+      pickUp: { time: pickUp?.time ?? "", cars: [] },
       members: [member],
       createdAt: Date.now(),
     };

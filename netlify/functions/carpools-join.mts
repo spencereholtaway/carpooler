@@ -6,12 +6,14 @@ type Member = {
   name: string;
   seats: number;
   kids: string[];
-  isDriving: boolean;
+  canDriveDropOff: boolean;
+  canDrivePickUp: boolean;
   street: string;
   zip: string;
 };
 type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
-type Leg = { time: string; driverId: string | null };
+type Car = { driverId: string; kids: string[] };
+type Leg = { time: string; cars: Car[] };
 type Carpool = {
   code: string;
   name: string;
@@ -23,8 +25,8 @@ type Carpool = {
 };
 
 // If this member has a linked co-parent who shares one of the kids just
-// assigned, add the co-parent too — but never mark them as driving, that's
-// always a separate, explicit choice each person makes for themselves.
+// assigned, add the co-parent too — but never mark them as able to drive,
+// that's always a separate, explicit choice each person makes for themselves.
 async function autoAddCoParent(
   store: ReturnType<typeof getStore>,
   carpool: Carpool,
@@ -45,7 +47,8 @@ async function autoAddCoParent(
     name: coProfile.name,
     seats: coProfile.seats,
     kids: sharedKids,
-    isDriving: false,
+    canDriveDropOff: false,
+    canDrivePickUp: false,
     street: coProfile.street,
     zip: coProfile.zip,
   });
@@ -54,6 +57,19 @@ async function autoAddCoParent(
   if (!existing.includes(carpool.code)) {
     await store.setJSON(`member:${coParentId}`, [...existing, carpool.code]);
   }
+}
+
+// Keep a leg's car list in sync with a member's driving toggle: drop their
+// car if they can no longer drive it, or give them one (defaulting to their
+// own unclaimed kids) if they now can and don't have one yet.
+function syncCar(leg: Leg, member: Member, canDrive: boolean) {
+  if (!canDrive) {
+    leg.cars = leg.cars.filter((c) => c.driverId !== member.id);
+    return;
+  }
+  if (leg.cars.some((c) => c.driverId === member.id)) return;
+  const claimed = new Set(leg.cars.flatMap((c) => c.kids));
+  leg.cars.push({ driverId: member.id, kids: member.kids.filter((k) => !claimed.has(k)) });
 }
 
 export default async (req: Request) => {
@@ -75,6 +91,9 @@ export default async (req: Request) => {
   } else {
     carpool.members[existingIndex] = member;
   }
+
+  syncCar(carpool.dropOff, member, member.canDriveDropOff);
+  syncCar(carpool.pickUp, member, member.canDrivePickUp);
 
   if (isNewJoin) {
     await autoAddCoParent(store, carpool, member.id, member.kids);

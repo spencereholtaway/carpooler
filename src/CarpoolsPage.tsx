@@ -91,13 +91,14 @@ export function CarpoolsPage({
         name: profile.name,
         seats: profile.seats,
         kids: [openForm.kid],
-        isDriving: true,
+        canDriveDropOff: false,
+        canDrivePickUp: false,
         street: profile.street,
         zip: profile.zip,
       };
       const destination = { street: destStreet, zip: destZip };
-      const dropOff = { time: dropOffTime, driverId: dropOffTime ? memberId : null };
-      const pickUp = { time: pickUpTime, driverId: pickUpTime ? memberId : null };
+      const dropOff = { time: dropOffTime, cars: [] };
+      const pickUp = { time: pickUpTime, cars: [] };
       onOpenCarpool(await createCarpool(trimmed, day, destination, dropOff, pickUp, member));
       setOpenForm(null);
     } catch {
@@ -123,7 +124,8 @@ export function CarpoolsPage({
         name: profile.name,
         seats: profile.seats,
         kids: [openForm.kid],
-        isDriving: false,
+        canDriveDropOff: false,
+        canDrivePickUp: false,
         street: profile.street,
         zip: profile.zip,
       };
@@ -258,6 +260,7 @@ export function CarpoolsPage({
                     type="time"
                     value={dropOffTime}
                     onChange={(e) => setDropOffTime(e.target.value)}
+                    onInvalid={(e) => e.preventDefault()}
                   />
                 </div>
 
@@ -267,6 +270,7 @@ export function CarpoolsPage({
                     type="time"
                     value={pickUpTime}
                     onChange={(e) => setPickUpTime(e.target.value)}
+                    onInvalid={(e) => e.preventDefault()}
                   />
                 </div>
 

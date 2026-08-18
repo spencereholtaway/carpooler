@@ -3,14 +3,20 @@ export type Member = {
   name: string;
   seats: number;
   kids: string[];
-  isDriving: boolean;
+  canDriveDropOff: boolean;
+  canDrivePickUp: boolean;
   street: string;
   zip: string;
 };
 
+export type Car = {
+  driverId: string;
+  kids: string[];
+};
+
 export type Leg = {
   time: string; // "HH:MM", 24h
-  driverId: string | null;
+  cars: Car[];
 };
 
 export const DAYS_OF_WEEK = [
