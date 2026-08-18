@@ -63,6 +63,7 @@ async function autoAddCoParent(
 // car if they can no longer drive it, or give them one (defaulting to their
 // own unclaimed kids) if they now can and don't have one yet.
 function syncCar(leg: Leg, member: Member, canDrive: boolean) {
+  leg.cars ??= [];
   if (!canDrive) {
     leg.cars = leg.cars.filter((c) => c.driverId !== member.id);
     return;
@@ -92,6 +93,8 @@ export default async (req: Request) => {
     carpool.members[existingIndex] = member;
   }
 
+  carpool.dropOff ??= { time: "", cars: [] };
+  carpool.pickUp ??= { time: "", cars: [] };
   syncCar(carpool.dropOff, member, member.canDriveDropOff);
   syncCar(carpool.pickUp, member, member.canDrivePickUp);
 

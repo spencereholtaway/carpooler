@@ -33,8 +33,10 @@ async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId
 
 function dropMember(carpool: Carpool, memberId: string) {
   carpool.members = carpool.members.filter((m) => m.id !== memberId);
-  carpool.dropOff.cars = carpool.dropOff.cars.filter((c) => c.driverId !== memberId);
-  carpool.pickUp.cars = carpool.pickUp.cars.filter((c) => c.driverId !== memberId);
+  carpool.dropOff ??= { time: "", cars: [] };
+  carpool.pickUp ??= { time: "", cars: [] };
+  carpool.dropOff.cars = (carpool.dropOff.cars ?? []).filter((c) => c.driverId !== memberId);
+  carpool.pickUp.cars = (carpool.pickUp.cars ?? []).filter((c) => c.driverId !== memberId);
 }
 
 async function handleMutation(store: ReturnType<typeof getStore>, req: Request) {
