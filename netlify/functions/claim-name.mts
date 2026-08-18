@@ -13,10 +13,11 @@ export default async (req: Request) => {
   const store = getStore("carpools");
   const claimedBy = await store.get(key);
 
-  if (claimedBy && claimedBy !== memberId) {
-    // Someone already owns this name. There's no password here, so typing a
-    // known name back in is treated as "log back in as that person" rather
-    // than a hard conflict.
+  if (claimedBy) {
+    // Someone already owns this name — could be this same browser's identity
+    // with a lost local profile, or a genuinely different device. Either way
+    // there's no password here, so typing a known name back in always means
+    // "log back in as that person" rather than silently creating a duplicate.
     return new Response(JSON.stringify({ recovered: true, memberId: claimedBy }), {
       headers: { "Content-Type": "application/json" },
     });

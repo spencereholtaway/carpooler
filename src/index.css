@@ -124,7 +124,9 @@ button {
 
 /* --- ethereal hero / name gate --- */
 
-#root:has(.hero-page) {
+#root:has(.hero-page),
+#root:has(.admin-page),
+#root:has(.admin-login) {
   max-width: none;
   padding: 0;
   border-inline: none;
@@ -1002,10 +1004,29 @@ button {
   color: #111827;
 }
 
+/* Standard SaaS container: full-bleed bars (.admin-header/.admin-main),
+   content centered with a max-width and breakpoint-based padding. */
+.admin-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+@media (min-width: 640px) {
+  .admin-container {
+    padding: 0 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-container {
+    padding: 0 32px;
+  }
+}
+
 .admin-header {
   background: #fff;
   border-bottom: 1px solid #e2e4e9;
-  padding: 0 24px;
 }
 
 .admin-logo {
@@ -1039,17 +1060,21 @@ button {
 }
 
 .admin-main {
-  padding: 24px;
+  padding: 24px 0;
+}
+
+.admin-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e2e4e9;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .admin-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #e2e4e9;
-  border-radius: 8px;
-  overflow: hidden;
   font-size: 13px;
 }
 

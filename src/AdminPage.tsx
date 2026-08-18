@@ -90,80 +90,88 @@ export function AdminPage() {
   return (
     <div className="admin-page">
       <header className="admin-header">
-        <span className="admin-logo">Blisspool Admin</span>
-        <nav className="admin-tabs">
-          <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
-            Users ({users.length})
-          </button>
-          <button className={tab === "carpools" ? "active" : ""} onClick={() => setTab("carpools")}>
-            Carpools ({carpools.length})
-          </button>
-        </nav>
+        <div className="admin-container">
+          <span className="admin-logo">Blisspool Admin</span>
+          <nav className="admin-tabs">
+            <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
+              Users ({users.length})
+            </button>
+            <button className={tab === "carpools" ? "active" : ""} onClick={() => setTab("carpools")}>
+              Carpools ({carpools.length})
+            </button>
+          </nav>
+        </div>
       </header>
 
       <main className="admin-main">
+        <div className="admin-container">
         {loading && <p>Loading...</p>}
         {error && <p className="admin-error">{error}</p>}
 
         {!loading && tab === "users" && (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Kids</th>
-                <th>Seats</th>
-                <th>Street</th>
-                <th>Zip</th>
-                <th>Member ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.memberId}>
-                  <td>{u.name}</td>
-                  <td>{u.kids?.join(", ") || "—"}</td>
-                  <td>{u.seats}</td>
-                  <td>{u.street || "—"}</td>
-                  <td>{u.zip || "—"}</td>
-                  <td className="admin-mono">{u.memberId}</td>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Kids</th>
+                  <th>Seats</th>
+                  <th>Street</th>
+                  <th>Zip</th>
+                  <th>Member ID</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.memberId}>
+                    <td>{u.name}</td>
+                    <td>{u.kids?.join(", ") || "—"}</td>
+                    <td>{u.seats}</td>
+                    <td>{u.street || "—"}</td>
+                    <td>{u.zip || "—"}</td>
+                    <td className="admin-mono">{u.memberId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {!loading && tab === "carpools" && (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Day</th>
-                <th>Destination</th>
-                <th>Drop-off</th>
-                <th>Pick-up</th>
-                <th>Members</th>
-                <th>Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              {carpools.map((c) => (
-                <tr key={c.code}>
-                  <td>{c.name}</td>
-                  <td>{c.day ?? "—"}</td>
-                  <td>
-                    {c.destination?.street
-                      ? `${c.destination.street}, ${c.destination.zip}`
-                      : "—"}
-                  </td>
-                  <td>{c.dropOff?.time || "—"}</td>
-                  <td>{c.pickUp?.time || "—"}</td>
-                  <td>{c.members.map((m) => m.name).join(", ")}</td>
-                  <td className="admin-mono">{c.code}</td>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Day</th>
+                  <th>Destination</th>
+                  <th>Drop-off</th>
+                  <th>Pick-up</th>
+                  <th>Members</th>
+                  <th>Code</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {carpools.map((c) => (
+                  <tr key={c.code}>
+                    <td>{c.name}</td>
+                    <td>{c.day ?? "—"}</td>
+                    <td>
+                      {c.destination?.street
+                        ? `${c.destination.street}, ${c.destination.zip}`
+                        : "—"}
+                    </td>
+                    <td>{c.dropOff?.time || "—"}</td>
+                    <td>{c.pickUp?.time || "—"}</td>
+                    <td>{c.members.map((m) => m.name).join(", ")}</td>
+                    <td className="admin-mono">{c.code}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+        </div>
       </main>
     </div>
   );
