@@ -1,0 +1,94 @@
+import type { Address, Carpool, DayOfWeek, Leg, Member } from "./types";
+import type { LocalProfile } from "./useProfile";
+
+async function unwrap(res: Response) {
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function claimName(
+  name: string,
+  memberId: string
+): Promise<{ recovered: boolean; memberId: string }> {
+  const res = await fetch("/api/claim-name", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, memberId }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function listCarpools(memberId: string): Promise<Carpool[]> {
+  return unwrap(await fetch(`/api/carpools?memberId=${encodeURIComponent(memberId)}`));
+}
+
+export async function createCarpool(
+  name: string,
+  day: DayOfWeek,
+  destination: Address,
+  dropOff: Leg,
+  pickUp: Leg,
+  member: Member
+): Promise<Carpool> {
+  return unwrap(
+    await fetch("/api/carpools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, day, destination, dropOff, pickUp, member }),
+    })
+  );
+}
+
+export async function joinCarpool(code: string, member: Member): Promise<Carpool> {
+  return unwrap(
+    await fetch("/api/carpools/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, member }),
+    })
+  );
+}
+
+export async function saveServerProfile(memberId: string, profile: LocalProfile): Promise<void> {
+  await fetch("/api/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ memberId, profile }),
+  });
+}
+
+export async function getHousehold(
+  memberId: string
+): Promise<{ code: string; coParentId: string | null; coParentName: string | null }> {
+  return unwrap(await fetch(`/api/household?memberId=${encodeURIComponent(memberId)}`));
+}
+
+export async function linkHousehold(
+  code: string,
+  memberId: string
+): Promise<{ coParentId: string; coParentName: string | null; coParentKids: string[] }> {
+  return unwrap(
+    await fetch("/api/household/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, memberId }),
+    })
+  );
+}
+
+export async function updateCarpoolSchedule(
+  code: string,
+  day: DayOfWeek,
+  destination: Address,
+  dropOff: Leg,
+  pickUp: Leg
+): Promise<Carpool> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, day, destination, dropOff, pickUp }),
+    })
+  );
+}
