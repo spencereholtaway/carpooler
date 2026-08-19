@@ -125,6 +125,7 @@ h3 {
   font-family: var(--serif);
   color: var(--text-h);
   font-weight: 500;
+  line-height: 1.25;
 }
 
 h1 {
@@ -808,11 +809,26 @@ button {
   box-shadow: 0 14px 34px rgba(139, 123, 184, 0.16);
 }
 
+.carpool-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
 .carpool-row-name {
   font-family: var(--sans);
   font-weight: 600;
   font-size: 17px;
   color: var(--text-h);
+}
+
+.carpool-row-time {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .carpool-row-summary {
@@ -842,7 +858,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 16px;
   padding: 0 0 0 4px;
   border: none;
   background: none;
@@ -850,11 +866,23 @@ button {
   animation: float-in 0.6s var(--ease-smooth) both;
 }
 
+.today-carpool-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .today-carpool-name {
   font-family: var(--sans);
   font-weight: 700;
   font-size: 20px;
   color: var(--text-h);
+}
+
+.today-carpool-time {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
 }
 
 .today-carpool-summary {

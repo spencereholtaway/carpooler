@@ -1,5 +1,13 @@
 import type { Car, Carpool, Member } from "./types";
 
+export function formatTime(time: string) {
+  if (!time) return "no time set";
+  const [h, m] = time.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 export function joinList(items: string[]): string {
   if (items.length === 0) return "";
   if (items.length === 1) return items[0];

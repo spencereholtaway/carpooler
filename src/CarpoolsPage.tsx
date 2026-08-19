@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createCarpool, joinCarpool, listCarpools } from "./api";
 import { BottomSheet } from "./BottomSheet";
-import { summarizeCarpool } from "./carpoolSummary";
+import { formatTime, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { DAYS_OF_WEEK, type Carpool, type DayOfWeek } from "./types";
 import type { LocalProfile } from "./useProfile";
@@ -22,7 +22,10 @@ function TodayCarpoolRow({
   const lines = display.split("\n");
   return (
     <button className="today-carpool" onClick={onOpen}>
-      <span className="today-carpool-name">{carpool.name}</span>
+      <div className="today-carpool-header">
+        <span className="today-carpool-name">{carpool.name}</span>
+        <span className="today-carpool-time">{rowTimeRange(carpool)}</span>
+      </div>
       <div className="today-carpool-summary">
         {lines.map((line, i) => (
           <p key={i}>
@@ -35,6 +38,15 @@ function TodayCarpoolRow({
       </div>
     </button>
   );
+}
+
+function rowTimeRange(carpool: Carpool): string {
+  const { time: drop } = carpool.dropOff;
+  const { time: pick } = carpool.pickUp;
+  if (drop && pick) return `${formatTime(drop)} - ${formatTime(pick)}`;
+  if (drop) return formatTime(drop);
+  if (pick) return formatTime(pick);
+  return "";
 }
 
 // Buckets by day and orders those buckets chronologically starting Monday —
@@ -207,7 +219,10 @@ export function CarpoolsPage({
               <span className="carpool-row-meta carpool-day-label">{day ?? "No day set"}</span>
               {dayCarpools.map((c) => (
                 <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
-                  <span className="carpool-row-name">{c.name}</span>
+                  <div className="carpool-row-top">
+                    <span className="carpool-row-name">{c.name}</span>
+                    <span className="carpool-row-time">{rowTimeRange(c)}</span>
+                  </div>
                   <div className="carpool-row-summary">
                     {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
                       .split("\n")

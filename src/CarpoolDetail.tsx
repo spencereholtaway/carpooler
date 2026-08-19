@@ -1,19 +1,11 @@
 import { useEffect, useState } from "react";
 import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
 import { BottomSheet } from "./BottomSheet";
-import { computeKidDefaults, joinList, summarizeCarpool } from "./carpoolSummary";
+import { computeKidDefaults, formatTime, joinList, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { mapsLink } from "./maps";
 import { DAYS_OF_WEEK, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
 import { useTypewriter } from "./useTypewriter";
-
-function formatTime(time: string) {
-  if (!time) return "no time set";
-  const [h, m] = time.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
 
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
   const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
@@ -168,12 +160,12 @@ function DrivingLeg({
     const others = kids.filter((k) => !m.kids.includes(k)).length;
     const free = eligible ? Math.max(m.seats - others, 0) : 0;
     const isSelf = m.id === memberId;
-    // A parent can always move their own kid into their own car, even if
-    // they haven't marked "I can drive" for this leg — that toggle only
+    const isCoParent = m.id === coParentId;
+    // A parent can always move their own kid into their own car or their
+    // co-parent's car, even if the driving toggle is off — that toggle only
     // gates offering up free seats to other members' kids.
     const movableKids = selfKidsList.filter((k) => !kids.includes(k));
-    const canMoveHere = movableKids.length > 0 && (isSelf || (eligible && free > 0));
-    const isCoParent = m.id === coParentId;
+    const canMoveHere = movableKids.length > 0 && (isSelf || isCoParent || (eligible && free > 0));
     return { m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids };
   });
 
