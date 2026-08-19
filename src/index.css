@@ -1083,6 +1083,18 @@ button {
   flex: 1;
 }
 
+.carpools-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  text-align: center;
+}
+
+.carpools-footer a {
+  color: var(--muted-2);
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
 .mini-form {
   display: flex;
   flex-direction: column;

@@ -379,6 +379,10 @@ export function CarpoolsPage({
         />
         {error && <p className="form-error">{error}</p>}
       </BottomSheet>
+
+      <footer className="carpools-footer">
+        <a href="mailto:blisspool-feedback@holtawaydesign.com">Feedback or Questions? Email us!</a>
+      </footer>
     </div>
   );
 }
