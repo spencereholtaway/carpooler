@@ -96,13 +96,16 @@ export function CarpoolsPage({
   memberId,
   profile,
   onOpenCarpool,
+  carpools,
+  setCarpools,
 }: {
   memberId: string;
   profile: LocalProfile;
   onOpenCarpool: (carpool: Carpool) => void;
+  carpools: Carpool[] | null;
+  setCarpools: (carpools: Carpool[]) => void;
 }) {
-  const [carpools, setCarpools] = useState<Carpool[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loading = carpools === null;
   const [typedCount, setTypedCount] = useState(0);
   const cameViaInviteLink = useRef(
     /^\d{6}$/.test(new URLSearchParams(window.location.search).get("join") ?? "")
@@ -133,9 +136,9 @@ export function CarpoolsPage({
   }, [openDialog, cameViaInviteLink]);
 
   useEffect(() => {
-    listCarpools(memberId)
-      .then(setCarpools)
-      .finally(() => setLoading(false));
+    if (carpools !== null) return;
+    listCarpools(memberId).then(setCarpools);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId]);
 
   const openJoin = () => {
@@ -217,9 +220,9 @@ export function CarpoolsPage({
     }
   };
 
-  const dayGroups = groupByDay(carpools);
+  const dayGroups = groupByDay(carpools ?? []);
   const today = DAYS_OF_WEEK[(new Date().getDay() + 6) % 7];
-  const todayCarpools = carpools
+  const todayCarpools = (carpools ?? [])
     .filter((c) => c.day === today)
     .sort((a, b) => (a.dropOff.time || "24:00").localeCompare(b.dropOff.time || "24:00"));
 
@@ -227,7 +230,7 @@ export function CarpoolsPage({
     <div className="carpools-page">
       {loading && <p className="muted">Loading...</p>}
 
-      {!loading && carpools.length === 0 && <p className="muted">No carpools yet.</p>}
+      {carpools?.length === 0 && <p className="muted">No carpools yet.</p>}
 
       {!loading && todayCarpools.length > 0 && (
         <section className="today-summary">
@@ -246,7 +249,7 @@ export function CarpoolsPage({
         </section>
       )}
 
-      {!loading && carpools.length > 0 && (
+      {carpools && carpools.length > 0 && (
         <section className="carpools-list">
           {dayGroups.map(({ day, carpools: dayCarpools }) => (
             <div className="carpool-day-group" key={day ?? "no-day"}>

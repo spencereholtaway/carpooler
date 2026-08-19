@@ -60,6 +60,20 @@ function App() {
   const { profile, memberId, loading, saveProfile, clearProfile, adoptMemberId } = useProfile();
   const [selectedCarpool, setSelectedCarpool] = useState<Carpool | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [carpools, setCarpools] = useState<Carpool[] | null>(null);
+
+  // Keep the already-fresh result of a create/join/edit around locally instead
+  // of re-fetching the whole list on every back-navigation — that refetch is
+  // what made the list feel slow, and re-reading data we just wrote risked
+  // showing a stale pre-edit version if the read landed before it propagated.
+  const upsertCarpool = (updated: Carpool) => {
+    setSelectedCarpool(updated);
+    setCarpools((prev) => {
+      if (!prev) return prev;
+      const exists = prev.some((c) => c.code === updated.code);
+      return exists ? prev.map((c) => (c.code === updated.code ? updated : c)) : [...prev, updated];
+    });
+  };
 
   if (window.location.pathname === "/admin") {
     return <AdminPage />;
@@ -129,10 +143,16 @@ function App() {
             memberId={memberId}
             allKids={profile.kids}
             onBack={() => setSelectedCarpool(null)}
-            onCarpoolUpdated={setSelectedCarpool}
+            onCarpoolUpdated={upsertCarpool}
           />
         ) : (
-          <CarpoolsPage memberId={memberId} profile={profile} onOpenCarpool={setSelectedCarpool} />
+          <CarpoolsPage
+            memberId={memberId}
+            profile={profile}
+            onOpenCarpool={upsertCarpool}
+            carpools={carpools}
+            setCarpools={setCarpools}
+          />
         )}
       </main>
       {editingProfile && (
