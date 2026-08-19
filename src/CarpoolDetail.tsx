@@ -29,6 +29,12 @@ function computeKidDefaults(members: Member[]): Map<string, string> {
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
   const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
   if (!driverId) return cleared;
+  // A member who isn't marked as driving this leg has no car entry at all —
+  // moving a kid to them (e.g. their own kid, regardless of that toggle)
+  // needs to create one rather than silently no-op.
+  if (!cleared.some((c) => c.driverId === driverId)) {
+    return [...cleared, { driverId, kids: [kid] }];
+  }
   return cleared.map((c) => (c.driverId === driverId ? { ...c, kids: [...c.kids, kid] } : c));
 }
 
@@ -153,15 +159,23 @@ function DrivingLeg({
     const others = kids.filter((k) => !m.kids.includes(k)).length;
     const free = eligible ? Math.max(m.seats - others, 0) : 0;
     const isSelf = m.id === memberId;
+    // A parent can always move their own kid into their own car, even if
+    // they haven't marked "I can drive" for this leg — that toggle only
+    // gates offering up free seats to other members' kids.
+    const isOwnKid = movingKid !== null && m.kids.includes(movingKid);
     const alreadyHere = movingKid !== null && kids.includes(movingKid);
-    const canMoveHere = movingKid !== null && !alreadyHere && (isSelf || (eligible && free > 0));
-    return { m, kids, eligible, free, isSelf, canMoveHere };
+    const canMoveHere = movingKid !== null && !alreadyHere && (isSelf || isOwnKid || (eligible && free > 0));
+    const isCoParent = m.id === coParentId;
+    return { m, kids, eligible, free, isSelf, isCoParent, canMoveHere };
   });
 
-  // You first, then cars with free seats, then everyone else.
+  // You first, then your co-parent, then cars with free seats, then everyone
+  // else — alphabetical by name within each tier.
   const rows = [...rowData].sort((a, b) => {
-    const rank = (r: (typeof rowData)[number]) => (r.isSelf ? 0 : r.eligible && r.free > 0 ? 1 : 2);
-    return rank(a) - rank(b);
+    const rank = (r: (typeof rowData)[number]) =>
+      r.isSelf ? 0 : r.m.id === coParentId ? 1 : r.eligible && r.free > 0 ? 2 : 3;
+    const rankDiff = rank(a) - rank(b);
+    return rankDiff !== 0 ? rankDiff : a.m.name.localeCompare(b.m.name);
   });
 
   return (
@@ -171,7 +185,7 @@ function DrivingLeg({
         <span className="driving-leg-time muted">{formatTime(time)}</span>
       </div>
       <div className="driving-row-list">
-        {rows.map(({ m, kids, eligible, free, isSelf, canMoveHere }) => {
+        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere }) => {
           const expanded = canMoveHere && expandedRow === m.id;
           return (
             <div
@@ -200,7 +214,11 @@ function DrivingLeg({
                   </div>
                 </div>
                 <span className={`seat-status ${eligible ? "" : "off"}`}>
-                  {eligible ? `${free} free seat${free === 1 ? "" : "s"}` : "No free seats"}
+                  {eligible
+                    ? `${free} free seat${free === 1 ? "" : "s"}`
+                    : isCoParent
+                      ? "Coparent"
+                      : "No free seats"}
                 </span>
               </div>
               {expanded && (

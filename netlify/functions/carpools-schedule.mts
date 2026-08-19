@@ -11,21 +11,30 @@ type Carpool = {
   destination: Address;
   dropOff: Leg;
   pickUp: Leg;
-  members: { id: string; canDriveDropOff: boolean; canDrivePickUp: boolean }[];
+  members: { id: string; kids: string[]; canDriveDropOff: boolean; canDrivePickUp: boolean }[];
   createdAt: number;
 };
 
-function sanitizeLeg(leg: Leg | undefined, eligibleDriverIds: Set<string>): Leg {
+// A member without this leg's "I can drive" toggle set still has a car entry
+// dropped server-side — unless every kid in it is their own. Parents can
+// always carry their own kids regardless of that toggle.
+function sanitizeLeg(
+  leg: Leg | undefined,
+  eligibleDriverIds: Set<string>,
+  ownKidsByMember: Map<string, Set<string>>
+): Leg {
   const seenKids = new Set<string>();
   const cars: Car[] = [];
   for (const car of leg?.cars ?? []) {
-    if (!eligibleDriverIds.has(car.driverId)) continue;
+    const ownKids = ownKidsByMember.get(car.driverId) ?? new Set<string>();
+    const isEligible = eligibleDriverIds.has(car.driverId);
     const kids = car.kids.filter((k) => {
       if (seenKids.has(k)) return false; // a kid can only ride in one car per leg
+      if (!isEligible && !ownKids.has(k)) return false;
       seenKids.add(k);
       return true;
     });
-    cars.push({ driverId: car.driverId, kids });
+    if (isEligible || kids.length > 0) cars.push({ driverId: car.driverId, kids });
   }
   return { time: leg?.time ?? "", cars };
 }
@@ -53,12 +62,13 @@ export default async (req: Request) => {
   const pickUpEligible = new Set(
     carpool.members.filter((m) => m.canDrivePickUp).map((m) => m.id)
   );
+  const ownKidsByMember = new Map(carpool.members.map((m) => [m.id, new Set(m.kids)]));
 
   if (name && name.trim()) carpool.name = name.trim();
   carpool.day = day;
   carpool.destination = { street: destination?.street ?? "", zip: destination?.zip ?? "" };
-  carpool.dropOff = sanitizeLeg(dropOff, dropOffEligible);
-  carpool.pickUp = sanitizeLeg(pickUp, pickUpEligible);
+  carpool.dropOff = sanitizeLeg(dropOff, dropOffEligible, ownKidsByMember);
+  carpool.pickUp = sanitizeLeg(pickUp, pickUpEligible, ownKidsByMember);
 
   await store.setJSON(`code:${code}`, carpool);
 
