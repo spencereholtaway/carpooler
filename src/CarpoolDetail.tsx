@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
 import { BottomSheet } from "./BottomSheet";
-import { computeKidDefaults, formatTime, joinList, summarizeCarpool } from "./carpoolSummary";
+import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { mapsLink } from "./maps";
-import { DAYS_OF_WEEK, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
+import { DAYS_OF_WEEK, type Address, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
 import { useTypewriter } from "./useTypewriter";
 
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
@@ -61,6 +61,38 @@ function AiMovePrompt({
         <button type="button" className="pill-button small secondary" onClick={onDismiss} disabled={busy}>
           No
         </button>
+      </div>
+    </div>
+  );
+}
+
+// A row of directions buttons, one per stop — every drive is at least two
+// locations (where you're coming from, where you're going), even when
+// that's just "Home" and the carpool's own destination.
+function DrivingStops({
+  legLabel,
+  stops,
+}: {
+  legLabel: string;
+  stops: { label: string; address: Address | undefined }[];
+}) {
+  const validStops = stops.filter((s): s is { label: string; address: Address } => !!s.address?.street);
+  if (validStops.length === 0) return null;
+  return (
+    <div className="driving-stops">
+      <span className="driving-stops-label muted">{legLabel}</span>
+      <div className="driving-stops-buttons">
+        {validStops.map((s) => (
+          <a
+            key={s.label}
+            className="pill-button small secondary driving-stop-button"
+            href={mapsLink(s.address.street, s.address.zip)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {s.label}
+          </a>
+        ))}
       </div>
     </div>
   );
@@ -425,6 +457,71 @@ export function CarpoolDetail({
   const youSummary = summarizeCarpool(carpool, memberId);
   const { display: typedSummary, done: typingDone } = useTypewriter(youSummary);
 
+  // Combined households drive as one unit, so a car under either parent's id
+  // counts as "you" driving — see the same merge in DrivingLeg.
+  const coParentMember = household?.coParentId
+    ? carpool.members.find((m) => m.id === household.coParentId)
+    : undefined;
+  const drivingIds =
+    household?.combined && coParentMember ? [memberId, coParentMember.id] : [memberId];
+  const myKids = new Set([...(self?.kids ?? []), ...(household?.combined ? coParentMember?.kids ?? [] : [])]);
+  const kidHome = (kid: string): Address | undefined => {
+    const owner = carpool.members.find((m) => m.kids.includes(kid));
+    return owner ? { street: owner.street, zip: owner.zip } : undefined;
+  };
+  // Same fallback resolveKidDrivers already uses for the AI summary text:
+  // a kid with no explicit car entry still defaults to riding with whichever
+  // parent owns them, so "you're driving" isn't limited to explicit rows.
+  const kidsIAmDriving = (cars: Car[] | undefined) => {
+    const kidToDriver = resolveKidDrivers(cars ?? [], carpool.members, kidDefaults);
+    return Array.from(kidToDriver.entries())
+      .filter(([, driverId]) => drivingIds.includes(driverId))
+      .map(([kid]) => kid);
+  };
+  const dropOffDrivingKids = kidsIAmDriving(carpool.dropOff?.cars);
+  const pickUpDrivingKids = kidsIAmDriving(carpool.pickUp?.cars);
+  const dropOffOtherKids = dropOffDrivingKids.filter((k) => !myKids.has(k));
+  const pickUpOtherKids = pickUpDrivingKids.filter((k) => !myKids.has(k));
+  const hasDrivingStops = dropOffDrivingKids.length > 0 || pickUpDrivingKids.length > 0;
+  const onlyOwnKids = hasDrivingStops && dropOffOtherKids.length === 0 && pickUpOtherKids.length === 0;
+  const homeAddress: Address | undefined = self ? { street: self.street, zip: self.zip } : undefined;
+  // Rendered twice (mobile/desktop), same as the AI summary above it — see
+  // the CSS toggle at the 900px breakpoint.
+  const drivingStops = hasDrivingStops && (
+    onlyOwnKids ? (
+      // Nobody else to route past — just the day's two locations, no need
+      // to call out which leg is which.
+      <DrivingStops
+        legLabel="Directions"
+        stops={[
+          { label: "Home", address: homeAddress },
+          { label: carpool.name, address: carpool.destination },
+        ]}
+      />
+    ) : (
+      <>
+        {dropOffDrivingKids.length > 0 && (
+          <DrivingStops
+            legLabel="Drop-off directions"
+            stops={[
+              ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+              { label: carpool.name, address: carpool.destination },
+            ]}
+          />
+        )}
+        {pickUpDrivingKids.length > 0 && (
+          <DrivingStops
+            legLabel="Pick-up directions"
+            stops={[
+              ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+              { label: "Home", address: homeAddress },
+            ]}
+          />
+        )}
+      </>
+    )
+  );
+
   const openCarpoolEditor = () => {
     setDraftKids(self?.kids ?? []);
     setDraftName(carpool.name);
@@ -633,6 +730,9 @@ export function CarpoolDetail({
             </p>
           </div>
         )}
+        {hasDrivingStops && (
+          <div className="driving-stops-section driving-stops-mobile-only">{drivingStops}</div>
+        )}
 
         <div className="schedule-summary">
           <h3 className="bliss-heading can-drive-heading">Can you drive?</h3>
@@ -721,6 +821,9 @@ export function CarpoolDetail({
               </div>
             ) : (
               <h3 className="bliss-heading">Who's driving who?</h3>
+            )}
+            {hasDrivingStops && (
+              <div className="driving-stops-section driving-stops-desktop-only">{drivingStops}</div>
             )}
             <DrivingLeg
               label="Drop-off"

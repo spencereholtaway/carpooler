@@ -1674,6 +1674,51 @@ button {
   }
 }
 
+.driving-stops-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.driving-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.driving-stops-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.driving-stops-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.driving-stop-button {
+  text-decoration: none;
+}
+
+/* Same two-copies-toggled-by-breakpoint trick as the AI summary above it —
+   must come after .driving-stops-section so this display:none actually wins
+   (equal specificity, so source order decides). */
+.driving-stops-desktop-only {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .driving-stops-mobile-only {
+    display: none;
+  }
+
+  .driving-stops-desktop-only {
+    display: flex;
+  }
+}
+
 .ai-summary-badge {
   display: inline-flex;
   align-items: center;
