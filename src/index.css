@@ -7,6 +7,35 @@
   --accent: #8b7bb8;
   --accent-text: #fff;
   --danger: #c2685f;
+  --muted-2: #a89fb5;
+  --bg-rgb: 251, 248, 245;
+  --driving-badge-bg: rgba(130, 168, 148, 0.18);
+  --driving-badge-text: #4c7360;
+
+  /* frosted-glass surfaces used across cards/sheets/dialogs */
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-strong: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --glass-border-strong: rgba(255, 255, 255, 0.85);
+  --glass-shadow: rgba(139, 123, 184, 0.1);
+  --backdrop: rgba(56, 47, 74, 0.32);
+
+  /* admin: plain SaaS palette, kept separate from the app's ethereal theme */
+  --admin-bg: #f3f4f6;
+  --admin-surface: #ffffff;
+  --admin-surface-2: #f9fafb;
+  --admin-border: #e2e4e9;
+  --admin-border-soft: #e5e7eb;
+  --admin-border-faint: #f0f1f3;
+  --admin-input-border: #d1d5db;
+  --admin-text: #111827;
+  --admin-text-muted: #6b7280;
+  --admin-text-muted-2: #374151;
+  --admin-accent: #4f46e5;
+  --admin-danger: #dc2626;
+  --admin-chip-bg: #f3f4f6;
+  --admin-panel-backdrop: rgba(15, 15, 20, 0.35);
+  --admin-panel-shadow: rgba(0, 0, 0, 0.15);
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --serif: "Fraunces", Georgia, serif;
@@ -14,11 +43,51 @@
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 
   font: 16px/150% var(--sans);
-  color-scheme: light;
+  color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #b8aecb;
+    --text-h: #f1ecf7;
+    --bg: #1a1620;
+    --card-bg: #241f2d;
+    --border: #362f42;
+    --accent: #a996dd;
+    --accent-text: #1a1620;
+    --danger: #e08a80;
+    --muted-2: #8b81a0;
+    --bg-rgb: 26, 22, 32;
+    --driving-badge-bg: rgba(130, 200, 168, 0.16);
+    --driving-badge-text: #8fd6ac;
+
+    --glass-bg: rgba(45, 39, 56, 0.6);
+    --glass-bg-strong: rgba(45, 39, 56, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-strong: rgba(255, 255, 255, 0.12);
+    --glass-shadow: rgba(0, 0, 0, 0.3);
+    --backdrop: rgba(0, 0, 0, 0.5);
+
+    --admin-bg: #14161c;
+    --admin-surface: #1c1f27;
+    --admin-surface-2: #20232c;
+    --admin-border: #2c303b;
+    --admin-border-soft: #2c303b;
+    --admin-border-faint: #262a33;
+    --admin-input-border: #3a3f4c;
+    --admin-text: #e5e7eb;
+    --admin-text-muted: #9aa1b1;
+    --admin-text-muted-2: #c2c7d2;
+    --admin-accent: #818cf8;
+    --admin-danger: #f87171;
+    --admin-chip-bg: #262a33;
+    --admin-panel-backdrop: rgba(0, 0, 0, 0.55);
+    --admin-panel-shadow: rgba(0, 0, 0, 0.4);
+  }
 }
 
 * {
@@ -171,7 +240,7 @@ button {
   align-items: center;
   justify-content: center;
   overflow-x: hidden;
-  background: #fbf8f5;
+  background: var(--bg);
   padding: 24px;
   box-sizing: border-box;
 }
@@ -233,6 +302,12 @@ button {
   filter: blur(60px);
   opacity: 0.55;
   will-change: transform;
+}
+
+@media (prefers-color-scheme: dark) {
+  .orb {
+    opacity: 0.28;
+  }
 }
 
 .orb-a {
@@ -330,10 +405,10 @@ button {
   width: min(420px, 100%);
   padding: 40px 32px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--glass-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--glass-border-strong);
   box-shadow:
     0 24px 60px rgba(139, 123, 184, 0.16),
     0 2px 8px rgba(139, 123, 184, 0.08);
@@ -394,7 +469,7 @@ button {
 
 .gate-fineprint {
   font-size: 12px;
-  color: #a89fb5;
+  color: var(--muted-2);
   margin: 4px 0 0;
 }
 
@@ -423,7 +498,7 @@ button {
   height: 34px;
   border-radius: 50%;
   border: 1px solid rgba(139, 123, 184, 0.35);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--glass-bg-strong);
   color: var(--accent);
   font-size: 18px;
   line-height: 1;
@@ -487,7 +562,7 @@ button {
   padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid rgba(139, 123, 184, 0.3);
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--glass-bg);
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
@@ -561,7 +636,7 @@ button {
 .app-shell {
   position: relative;
   min-height: 100svh;
-  background: #fbf8f5;
+  background: var(--bg);
 }
 
 .app-shell-topper {
@@ -682,8 +757,8 @@ button {
   gap: 12px;
   padding: 18px 20px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(139, 123, 184, 0.1);
@@ -723,8 +798,8 @@ button {
   gap: 12px;
   padding: 22px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(139, 123, 184, 0.1);
@@ -844,7 +919,7 @@ button {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(56, 47, 74, 0.32);
+  background: var(--backdrop);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   animation: fade-in 0.2s ease both;
@@ -930,10 +1005,10 @@ button {
   gap: 10px;
   padding: 32px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--glass-border);
   animation: breathe-invite 6s ease-in-out infinite;
 }
 
@@ -1021,7 +1096,11 @@ button {
   display: flex;
   justify-content: center;
   padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(251, 248, 245, 0) 0%, rgba(251, 248, 245, 0.95) 30%);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--bg-rgb), 0) 0%,
+    rgba(var(--bg-rgb), 0.95) 30%
+  );
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -1176,8 +1255,8 @@ button {
   margin-left: 8px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(130, 168, 148, 0.18);
-  color: #4c7360;
+  background: var(--driving-badge-bg);
+  color: var(--driving-badge-text);
   font-size: 11px;
   font-weight: 600;
   vertical-align: middle;
@@ -1207,7 +1286,7 @@ button {
   max-width: calc(100vw - 32px);
   padding: 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--glass-border);
   background: var(--card-bg);
   box-shadow: 0 16px 36px rgba(139, 123, 184, 0.22);
 }
@@ -1306,7 +1385,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  background: var(--admin-bg);
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -1316,8 +1395,8 @@ button {
   gap: 12px;
   width: 280px;
   padding: 24px;
-  background: #fff;
-  border: 1px solid #e2e4e9;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
@@ -1326,7 +1405,7 @@ button {
   font-family: inherit;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--admin-text);
   margin: 0 0 4px;
 }
 
@@ -1334,7 +1413,7 @@ button {
   width: 100%;
   font-family: inherit;
   padding: 8px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--admin-input-border);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -1346,8 +1425,8 @@ button {
   padding: 8px 12px;
   border: none;
   border-radius: 6px;
-  background: #4f46e5;
-  color: #fff;
+  background: var(--admin-accent);
+  color: var(--admin-surface);
   cursor: pointer;
 }
 
@@ -1357,16 +1436,16 @@ button {
 }
 
 .admin-error {
-  color: #dc2626;
+  color: var(--admin-danger);
   font-size: 13px;
   margin: 0;
 }
 
 .admin-page {
   min-height: 100svh;
-  background: #f3f4f6;
+  background: var(--admin-bg);
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #111827;
+  color: var(--admin-text);
 }
 
 /* Standard SaaS container: full-bleed bars (.admin-header/.admin-main),
@@ -1390,8 +1469,8 @@ button {
 }
 
 .admin-header {
-  background: #fff;
-  border-bottom: 1px solid #e2e4e9;
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .admin-logo {
@@ -1399,7 +1478,7 @@ button {
   font-size: 15px;
   font-weight: 700;
   padding: 16px 0 12px;
-  color: #111827;
+  color: var(--admin-text);
 }
 
 .admin-tabs {
@@ -1414,14 +1493,14 @@ button {
   padding: 10px 14px;
   border: none;
   background: none;
-  color: #6b7280;
+  color: var(--admin-text-muted);
   border-bottom: 2px solid transparent;
   cursor: pointer;
 }
 
 .admin-tabs button.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
 }
 
 .admin-main {
@@ -1431,9 +1510,9 @@ button {
 .admin-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid #e2e4e9;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--admin-surface);
 }
 
 .admin-table {
@@ -1446,20 +1525,20 @@ button {
 .admin-table th {
   text-align: left;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--admin-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-size: 11px;
   padding: 10px 14px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e2e4e9;
+  background: var(--admin-surface-2);
+  border-bottom: 1px solid var(--admin-border);
   white-space: nowrap;
 }
 
 .admin-table td {
   padding: 10px 14px;
-  border-bottom: 1px solid #f0f1f3;
-  color: #111827;
+  border-bottom: 1px solid var(--admin-border-faint);
+  color: var(--admin-text);
   white-space: nowrap;
   vertical-align: top;
 }
@@ -1471,7 +1550,7 @@ button {
 .admin-mono {
   font-family: ui-monospace, monospace;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--admin-text-muted);
 }
 
 .admin-copy-code {
@@ -1482,7 +1561,7 @@ button {
 }
 
 .admin-copy-code:hover {
-  color: #374151;
+  color: var(--admin-text-muted-2);
   text-decoration: underline;
 }
 
@@ -1503,7 +1582,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: #f3f4f6;
+  background: var(--admin-chip-bg);
   border-radius: 999px;
   padding: 2px 6px 2px 8px;
   margin: 2px 4px 2px 0;
@@ -1514,7 +1593,7 @@ button {
   border: none;
   background: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--admin-text-muted);
   font-size: 14px;
   line-height: 1;
   padding: 0 2px;
@@ -1542,7 +1621,7 @@ button {
 .admin-panel-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 15, 20, 0.35);
+  background: var(--admin-panel-backdrop);
   display: flex;
   justify-content: flex-end;
   z-index: 100;
@@ -1552,10 +1631,10 @@ button {
   width: 380px;
   max-width: 100%;
   height: 100%;
-  background: #fff;
+  background: var(--admin-surface);
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
+  box-shadow: -8px 0 30px var(--admin-panel-shadow);
   animation: admin-panel-in 0.18s ease-out;
 }
 
@@ -1575,7 +1654,7 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--admin-border-soft);
 }
 
 .admin-panel-header h3 {
@@ -1588,7 +1667,7 @@ button {
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--admin-text-muted);
   padding: 0 4px;
 }
 
@@ -1600,7 +1679,7 @@ button {
 
 .admin-panel-footer {
   padding: 16px 20px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--admin-border-soft);
 }
 
 .admin-panel-form {
@@ -1614,11 +1693,11 @@ button {
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #374151;
+  color: var(--admin-text-muted-2);
 }
 
 .admin-panel-members {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--admin-border-soft);
   padding-top: 14px;
 }
 
