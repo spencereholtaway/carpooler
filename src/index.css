@@ -490,6 +490,29 @@ button {
   margin: 4px 0 0;
 }
 
+.gate-alpha-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  text-align: left;
+}
+
+.gate-alpha-warning p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.gate-alpha-warning strong {
+  color: var(--text-h);
+}
+
 .gate-field {
   display: flex;
   flex-direction: column;

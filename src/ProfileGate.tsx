@@ -11,7 +11,7 @@ export function ProfileGate({
   onSubmit: (profile: LocalProfile) => void;
   onRecoverMemberId: (id: string) => void;
 }) {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<0 | 1 | 2>(0);
   const [name, setName] = useState("");
   const [checkingName, setCheckingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -98,6 +98,29 @@ export function ProfileGate({
     }
     onSubmit({ name: name.trim(), seats, kids, street: street.trim(), zip: zip.trim() });
   };
+
+  if (step === 0) {
+    return (
+      <div className="gate-card">
+        <h2 className="gate-heading">Before you join</h2>
+        <div className="gate-alpha-warning">
+          <p>
+            <strong>blisspool is in early alpha testing.</strong> It has no login or security
+            yet — anything you enter here, including names, addresses, and children&rsquo;s
+            names, is <strong>publicly visible on the internet</strong> to anyone with the link.
+          </p>
+          <p>Please don&rsquo;t enter anything you&rsquo;re not comfortable being public right now.</p>
+          <p>
+            We&rsquo;ll add proper secure authentication before this leaves testing — this
+            warning will go away once that happens.
+          </p>
+        </div>
+        <button type="button" className="pill-button" onClick={() => setStep(1)}>
+          I understand, continue →
+        </button>
+      </div>
+    );
+  }
 
   if (step === 1) {
     return (
