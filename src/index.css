@@ -2129,6 +2129,14 @@ button {
   border-bottom: none;
 }
 
+.admin-table tr.admin-row-clickable {
+  cursor: pointer;
+}
+
+.admin-table tr.admin-row-clickable:hover td {
+  background: var(--admin-surface-2);
+}
+
 .admin-mono {
   font-family: ui-monospace, monospace;
   font-size: 12px;
@@ -2194,10 +2202,56 @@ button {
   margin-top: 6px;
 }
 
-.admin-add-member-row select {
+.admin-add-member-row .admin-autosuggest {
   font-size: 12px;
   flex: 1;
   min-width: 0;
+}
+
+.admin-autosuggest {
+  position: relative;
+}
+
+.admin-autosuggest input {
+  width: 100%;
+  font-size: inherit;
+}
+
+.admin-autosuggest-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px var(--admin-panel-shadow);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.admin-autosuggest-list li {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--admin-text);
+}
+
+.admin-autosuggest-list li.active,
+.admin-autosuggest-list li:hover {
+  background: var(--admin-surface-2);
+}
+
+.admin-autosuggest-empty {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--admin-text-muted-2);
+  cursor: default;
 }
 
 .admin-panel-backdrop {
@@ -2205,28 +2259,30 @@ button {
   inset: 0;
   background: var(--admin-panel-backdrop);
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: flex-end;
   z-index: 100;
 }
 
 .admin-panel {
-  width: 380px;
+  width: min(960px, 94vw);
   max-width: 100%;
-  height: 100%;
+  height: 92vh;
   background: var(--admin-surface);
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 30px var(--admin-panel-shadow);
-  animation: admin-panel-in 0.18s ease-out;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -16px 50px var(--admin-panel-shadow);
+  animation: admin-panel-in 0.2s ease-out;
 }
 
 @keyframes admin-panel-in {
   from {
-    transform: translateX(24px);
+    transform: translateY(40px);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
   }
 }
@@ -2278,11 +2334,138 @@ button {
   color: var(--admin-text-muted-2);
 }
 
-.admin-panel-members {
+.admin-form-row {
+  display: flex;
+  gap: 14px;
+}
+
+.admin-form-row label {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-panel-members,
+.admin-panel-household {
   border-top: 1px solid var(--admin-border-soft);
   padding-top: 14px;
 }
 
-.admin-panel-members h4 {
+.admin-panel-members h4,
+.admin-panel-household h4 {
   margin: 0 0 8px;
+}
+
+.admin-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--admin-text-muted-2);
+  margin: 10px 0;
+}
+
+.admin-panel-driving {
+  border-top: 1px solid var(--admin-border-soft);
+  padding-top: 14px;
+}
+
+.admin-leg-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  border-top: 1px solid var(--admin-border-soft);
+  padding-top: 14px;
+}
+
+.admin-leg-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.admin-leg-view-tabs button {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.admin-leg-tabs button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--admin-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.admin-leg-tabs button.active {
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
+}
+
+.admin-panel-leg-assignments {
+  padding-top: 4px;
+}
+
+.admin-panel-driving h4,
+.admin-panel-leg-assignments h4 {
+  margin: 0 0 8px;
+}
+
+.admin-driving-table th,
+.admin-driving-table td {
+  text-align: left;
+}
+
+.admin-driving-table .admin-autosuggest {
+  width: 100%;
+  min-width: 160px;
+}
+
+.admin-muted {
+  color: var(--admin-text-muted-2);
+  font-size: 13px;
+}
+
+.admin-car-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-car-card {
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.admin-car-card-header {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.admin-car-card-kids {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.admin-car-card .admin-autosuggest {
+  max-width: 220px;
+}
+
+.admin-kid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.admin-kid-parent {
+  font-size: 11px;
+  line-height: 1;
+  margin-top: -2px;
+  color: var(--admin-text-muted-2);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 const KEY_STORAGE = "blisspool:admin-key";
 
@@ -9,6 +9,9 @@ type AdminUser = {
   kids: string[];
   street: string;
   zip: string;
+  coParentId?: string | null;
+  coParentName?: string | null;
+  householdCombined?: boolean;
 };
 
 type AdminMember = {
@@ -44,6 +47,138 @@ function CopyableCode({ value }: { value: string }) {
   );
 }
 
+// Ranks a name against a typed query by which "word" of the name matches
+// first: a match on the first word (usually a first name) outranks a match
+// on a later word (usually a last name), and both outrank a plain substring
+// hit elsewhere in the name. Returns null when nothing matches at all.
+function rankNameMatch(name: string, query: string): number | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  const words = name.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  if (words[0].startsWith(q)) return 0;
+  if (words.slice(1).some((w) => w.startsWith(q))) return 1;
+  if (name.toLowerCase().includes(q)) return 2;
+  return null;
+}
+
+function NameAutosuggest({
+  options,
+  value,
+  onChange,
+  placeholder,
+  allowClear,
+  clearLabel = "Unassigned",
+}: {
+  options: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  allowClear?: boolean;
+  clearLabel?: string;
+}) {
+  const selected = options.find((o) => o.id === value);
+  const [query, setQuery] = useState(selected?.name ?? "");
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Keep the visible text in sync with the selected option when it changes
+  // from outside (e.g. reset after a save) — but not while the dropdown is
+  // open and the user is mid-search.
+  useEffect(() => {
+    if (!open) setQuery(selected?.name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery(selected?.name ?? "");
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open, selected]);
+
+  const ranked = options
+    .map((o) => ({ o, rank: rankNameMatch(o.name, query) }))
+    .filter((r): r is { o: { id: string; name: string }; rank: number } => r.rank !== null)
+    .sort((a, b) => a.rank - b.rank || a.o.name.localeCompare(b.o.name))
+    .map((r) => r.o);
+
+  const commit = (id: string, name: string) => {
+    onChange(id);
+    setQuery(name);
+    setOpen(false);
+  };
+
+  return (
+    <div className="admin-autosuggest" ref={containerRef}>
+      <input
+        value={query}
+        placeholder={placeholder}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          setHighlight(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (!open) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlight((h) => Math.min(h + 1, ranked.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlight((h) => Math.max(h - 1, 0));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const pick = ranked[highlight];
+            if (pick) commit(pick.id, pick.name);
+          } else if (e.key === "Escape") {
+            setOpen(false);
+            setQuery(selected?.name ?? "");
+          }
+        }}
+      />
+      {open && (
+        <ul className="admin-autosuggest-list">
+          {allowClear && (
+            <li
+              className={value === "" ? "active" : ""}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                commit("", "");
+              }}
+            >
+              {clearLabel}
+            </li>
+          )}
+          {ranked.length === 0 ? (
+            <li className="admin-autosuggest-empty">No matches</li>
+          ) : (
+            ranked.map((o, i) => (
+              <li
+                key={o.id}
+                className={i === highlight ? "active" : ""}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit(o.id, o.name);
+                }}
+              >
+                {o.name}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SidePanel({
   open,
   onClose,
@@ -71,6 +206,142 @@ function SidePanel({
         <div className="admin-panel-body">{children}</div>
         {footer && <div className="admin-panel-footer">{footer}</div>}
       </div>
+    </div>
+  );
+}
+
+function LegAssignments({
+  carpool,
+  leg,
+  label,
+  onMoveKid,
+}: {
+  carpool: AdminCarpool;
+  leg: "dropOff" | "pickUp";
+  label: string;
+  onMoveKid: (kid: string, driverId: string | null) => void;
+}) {
+  const legData = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
+  const cars = legData?.cars ?? [];
+  const drivers = carpool.members.filter((m) => (leg === "dropOff" ? m.canDriveDropOff : m.canDrivePickUp));
+  const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const driverFor = (kid: string) => cars.find((c) => c.kids.includes(kid))?.driverId ?? "";
+  const parentOf = (kid: string) => carpool.members.find((m) => m.kids.includes(kid))?.name ?? "";
+
+  return (
+    <div className="admin-panel-leg-assignments">
+      <h4>{label} cars</h4>
+      {allKids.length === 0 ? (
+        <p className="admin-muted">No kids in this carpool.</p>
+      ) : drivers.length === 0 ? (
+        <p className="admin-muted">No one can drive {label.toLowerCase()} yet.</p>
+      ) : (
+        <table className="admin-table admin-driving-table">
+          <thead>
+            <tr>
+              <th>Kid</th>
+              <th>Rides with</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allKids.map((kid) => (
+              <tr key={kid}>
+                <td>
+                  <div className="admin-kid-cell">
+                    <strong>{kid}</strong>
+                    <span className="admin-kid-parent">{parentOf(kid)}</span>
+                  </div>
+                </td>
+                <td>
+                  <NameAutosuggest
+                    options={drivers}
+                    value={driverFor(kid)}
+                    onChange={(id) => onMoveKid(kid, id || null)}
+                    placeholder="Unassigned"
+                    allowClear
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function LegAssignmentsByParent({
+  carpool,
+  leg,
+  label,
+  onMoveKid,
+}: {
+  carpool: AdminCarpool;
+  leg: "dropOff" | "pickUp";
+  label: string;
+  onMoveKid: (kid: string, driverId: string | null) => void;
+}) {
+  const legData = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
+  const cars = legData?.cars ?? [];
+  const drivers = carpool.members.filter((m) => (leg === "dropOff" ? m.canDriveDropOff : m.canDrivePickUp));
+  const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const assignedKids = new Set(cars.flatMap((c) => c.kids));
+  const unassignedKids = allKids.filter((k) => !assignedKids.has(k));
+
+  return (
+    <div className="admin-panel-leg-assignments">
+      <h4>{label} cars</h4>
+      {drivers.length === 0 ? (
+        <p className="admin-muted">No one can drive {label.toLowerCase()} yet.</p>
+      ) : (
+        <div className="admin-car-list">
+          {drivers.map((d) => {
+            const kids = (cars.find((c) => c.driverId === d.id)?.kids ?? []).slice().sort((a, b) =>
+              a.localeCompare(b)
+            );
+            const addOptions = unassignedKids.map((k) => ({ id: k, name: k }));
+            return (
+              <div className="admin-car-card" key={d.id}>
+                <div className="admin-car-card-header">{d.name}</div>
+                <div className="admin-car-card-kids">
+                  {kids.length === 0 ? (
+                    <span className="admin-muted">Nobody</span>
+                  ) : (
+                    kids.map((k) => (
+                      <span className="admin-member-chip" key={k}>
+                        {k}{" "}
+                        <button
+                          type="button"
+                          className="admin-chip-remove"
+                          title="Unassign"
+                          onClick={() => onMoveKid(k, null)}
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                {addOptions.length > 0 && (
+                  <NameAutosuggest
+                    key={`add-${leg}-${d.id}-${kids.length}`}
+                    options={addOptions}
+                    value=""
+                    onChange={(kid) => {
+                      if (kid) onMoveKid(kid, d.id);
+                    }}
+                    placeholder="Add kid..."
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -158,6 +429,7 @@ export function AdminPage() {
   const startEditUser = (u: AdminUser) => {
     setEditingUser(u.memberId);
     setUserDraft({ ...u });
+    setCoParentSelection("");
   };
   const saveUser = async () => {
     if (!userDraft) return;
@@ -181,13 +453,41 @@ export function AdminPage() {
     await callAdmin("deleteUser", { memberId });
   };
 
+  const [coParentSelection, setCoParentSelection] = useState("");
+  const [linkingCoParent, setLinkingCoParent] = useState(false);
+  const linkCoParent = async (memberId: string) => {
+    if (!coParentSelection) return;
+    setLinkingCoParent(true);
+    try {
+      await callAdmin("linkCoParents", { memberId, coParentId: coParentSelection });
+      setCoParentSelection("");
+    } finally {
+      setLinkingCoParent(false);
+    }
+  };
+  const unlinkCoParent = async (memberId: string) => {
+    if (!confirm("Unlink this co-parent household?")) return;
+    await callAdmin("unlinkCoParents", { memberId });
+  };
+  const setHouseholdCombined = (memberId: string, combined: boolean) =>
+    callAdmin("setHouseholdCombined", { memberId, combined });
+
   const [editingCarpool, setEditingCarpool] = useState<string | null>(null);
   const [carpoolDraft, setCarpoolDraft] = useState<AdminCarpool | null>(null);
   const [savingCarpool, setSavingCarpool] = useState(false);
+  const [legTab, setLegTab] = useState<"dropOff" | "pickUp">("dropOff");
+  const [legViewMode, setLegViewMode] = useState<"kid" | "parent">("kid");
   const startEditCarpool = (c: AdminCarpool) => {
     setEditingCarpool(c.code);
-    setCarpoolDraft({ ...c, destination: { ...(c.destination ?? { street: "", zip: "" }) } });
+    setCarpoolDraft({
+      ...c,
+      destination: { ...(c.destination ?? { street: "", zip: "" }) },
+      dropOff: { time: c.dropOff?.time ?? "", cars: c.dropOff?.cars ?? [] },
+      pickUp: { time: c.pickUp?.time ?? "", cars: c.pickUp?.cars ?? [] },
+    });
     setAddMemberSelection("");
+    setLegTab("dropOff");
+    setLegViewMode("kid");
   };
   const saveCarpool = async () => {
     if (!carpoolDraft) return;
@@ -198,12 +498,18 @@ export function AdminPage() {
         name: carpoolDraft.name,
         day: carpoolDraft.day,
         destination: carpoolDraft.destination,
+        dropOffTime: carpoolDraft.dropOff?.time ?? "",
+        pickUpTime: carpoolDraft.pickUp?.time ?? "",
       });
       setEditingCarpool(null);
     } finally {
       setSavingCarpool(false);
     }
   };
+  const setMemberDriving = (code: string, memberId: string, leg: "dropOff" | "pickUp", value: boolean) =>
+    callAdmin("setMemberDriving", { code, memberId, leg, value });
+  const moveKid = (code: string, leg: "dropOff" | "pickUp", kid: string, driverId: string | null) =>
+    callAdmin("moveKid", { code, leg, kid, driverId });
   const deleteCarpool = async (code: string) => {
     if (!confirm("Delete this carpool entirely?")) return;
     await callAdmin("deleteCarpool", { code });
@@ -230,6 +536,10 @@ export function AdminPage() {
   // The panel's carpool data needs to reflect the latest load (e.g. after
   // adding/removing a member), not the stale snapshot captured when it opened.
   const liveEditingCarpool = editingCarpool ? carpools.find((c) => c.code === editingCarpool) : null;
+  // Same idea for the user panel: co-parent link/unlink/combine happen
+  // immediately, so the panel needs the freshly reloaded user, not the
+  // snapshot captured when it opened.
+  const liveEditingUser = editingUser ? users.find((u) => u.memberId === editingUser) : null;
 
   if (!key) {
     return (
@@ -320,7 +630,7 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.memberId}>
+                  <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
                     <td>{u.name}</td>
                     <td>{u.kids?.join(", ") || "—"}</td>
                     <td>{u.seats}</td>
@@ -328,8 +638,7 @@ export function AdminPage() {
                     <td>{u.zip || "—"}</td>
                     <td className="admin-mono">{u.memberId}</td>
                     <td>
-                      <button onClick={() => startEditUser(u)}>Edit</button>{" "}
-                      <button onClick={() => deleteUser(u.memberId)}>Delete</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteUser(u.memberId); }}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -355,7 +664,7 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {carpools.map((c) => (
-                  <tr key={c.code}>
+                  <tr key={c.code} className="admin-row-clickable" onClick={() => startEditCarpool(c)}>
                     <td>{c.name}</td>
                     <td>{c.day ?? "—"}</td>
                     <td>
@@ -374,12 +683,11 @@ export function AdminPage() {
                         "—"
                       )}
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <CopyableCode value={c.code} />
                     </td>
                     <td>
-                      <button onClick={() => startEditCarpool(c)}>Edit</button>{" "}
-                      <button onClick={() => deleteCarpool(c.code)}>Delete</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteCarpool(c.code); }}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -447,6 +755,53 @@ export function AdminPage() {
               />
             </label>
             <p className="admin-mono">{userDraft.memberId}</p>
+
+            {liveEditingUser && (
+              <div className="admin-panel-household">
+                <h4>Co-parent household</h4>
+                {liveEditingUser.coParentId ? (
+                  <>
+                    <p>
+                      Linked with <strong>{liveEditingUser.coParentName ?? "Unknown"}</strong>
+                    </p>
+                    <label className="admin-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={liveEditingUser.householdCombined ?? false}
+                        onChange={() =>
+                          setHouseholdCombined(
+                            liveEditingUser.memberId,
+                            !(liveEditingUser.householdCombined ?? false)
+                          )
+                        }
+                      />
+                      Drives as one combined household
+                    </label>
+                    <button type="button" onClick={() => unlinkCoParent(liveEditingUser.memberId)}>
+                      Unlink
+                    </button>
+                  </>
+                ) : (
+                  <div className="admin-add-member-row">
+                    <NameAutosuggest
+                      options={users
+                        .filter((u) => u.memberId !== liveEditingUser.memberId)
+                        .map((u) => ({ id: u.memberId, name: u.name }))}
+                      value={coParentSelection}
+                      onChange={setCoParentSelection}
+                      placeholder="Link to user..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => linkCoParent(liveEditingUser.memberId)}
+                      disabled={!coParentSelection || linkingCoParent}
+                    >
+                      {linkingCoParent ? "Linking..." : "Link"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </SidePanel>
@@ -466,44 +821,74 @@ export function AdminPage() {
       >
         {carpoolDraft && liveEditingCarpool && (
           <div className="admin-panel-form">
-            <label>
-              Name
-              <input
-                value={carpoolDraft.name}
-                onChange={(e) => setCarpoolDraft({ ...carpoolDraft, name: e.target.value })}
-              />
-            </label>
-            <label>
-              Day
-              <input
-                value={carpoolDraft.day}
-                onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
-              />
-            </label>
-            <label>
-              Destination street
-              <input
-                value={carpoolDraft.destination?.street ?? ""}
-                onChange={(e) =>
-                  setCarpoolDraft({
-                    ...carpoolDraft,
-                    destination: { street: e.target.value, zip: carpoolDraft.destination?.zip ?? "" },
-                  })
-                }
-              />
-            </label>
-            <label>
-              Destination zip
-              <input
-                value={carpoolDraft.destination?.zip ?? ""}
-                onChange={(e) =>
-                  setCarpoolDraft({
-                    ...carpoolDraft,
-                    destination: { street: carpoolDraft.destination?.street ?? "", zip: e.target.value },
-                  })
-                }
-              />
-            </label>
+            <div className="admin-form-row">
+              <label>
+                Name
+                <input
+                  value={carpoolDraft.name}
+                  onChange={(e) => setCarpoolDraft({ ...carpoolDraft, name: e.target.value })}
+                />
+              </label>
+              <label>
+                Day
+                <input
+                  value={carpoolDraft.day}
+                  onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
+                />
+              </label>
+              <label>
+                Drop-off time
+                <input
+                  type="time"
+                  value={carpoolDraft.dropOff?.time ?? ""}
+                  onChange={(e) =>
+                    setCarpoolDraft({
+                      ...carpoolDraft,
+                      dropOff: { time: e.target.value, cars: carpoolDraft.dropOff?.cars ?? [] },
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Pick-up time
+                <input
+                  type="time"
+                  value={carpoolDraft.pickUp?.time ?? ""}
+                  onChange={(e) =>
+                    setCarpoolDraft({
+                      ...carpoolDraft,
+                      pickUp: { time: e.target.value, cars: carpoolDraft.pickUp?.cars ?? [] },
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="admin-form-row">
+              <label>
+                Destination street
+                <input
+                  value={carpoolDraft.destination?.street ?? ""}
+                  onChange={(e) =>
+                    setCarpoolDraft({
+                      ...carpoolDraft,
+                      destination: { street: e.target.value, zip: carpoolDraft.destination?.zip ?? "" },
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Destination zip
+                <input
+                  value={carpoolDraft.destination?.zip ?? ""}
+                  onChange={(e) =>
+                    setCarpoolDraft({
+                      ...carpoolDraft,
+                      destination: { street: carpoolDraft.destination?.street ?? "", zip: e.target.value },
+                    })
+                  }
+                />
+              </label>
+            </div>
             <p>
               <CopyableCode value={carpoolDraft.code} />
             </p>
@@ -523,16 +908,14 @@ export function AdminPage() {
                 </span>
               ))}
               <div className="admin-add-member-row">
-                <select value={addMemberSelection} onChange={(e) => setAddMemberSelection(e.target.value)}>
-                  <option value="">Add user...</option>
-                  {users
+                <NameAutosuggest
+                  options={users
                     .filter((u) => !liveEditingCarpool.members.some((m) => m.id === u.memberId))
-                    .map((u) => (
-                      <option key={u.memberId} value={u.memberId}>
-                        {u.name}
-                      </option>
-                    ))}
-                </select>
+                    .map((u) => ({ id: u.memberId, name: u.name }))}
+                  value={addMemberSelection}
+                  onChange={setAddMemberSelection}
+                  placeholder="Add user..."
+                />
                 <button
                   onClick={() => addMember(liveEditingCarpool.code)}
                   disabled={!addMemberSelection || addingMember}
@@ -541,6 +924,94 @@ export function AdminPage() {
                 </button>
               </div>
             </div>
+
+            <div className="admin-panel-driving">
+              <h4>Who can drive</h4>
+              <table className="admin-table admin-driving-table">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Drop-off</th>
+                    <th>Pick-up</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveEditingCarpool.members.map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.name}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={m.canDriveDropOff}
+                          onChange={() =>
+                            setMemberDriving(liveEditingCarpool.code, m.id, "dropOff", !m.canDriveDropOff)
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={m.canDrivePickUp}
+                          onChange={() =>
+                            setMemberDriving(liveEditingCarpool.code, m.id, "pickUp", !m.canDrivePickUp)
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-leg-tabs-row">
+              <div className="admin-leg-tabs">
+                <button
+                  type="button"
+                  className={legTab === "dropOff" ? "active" : ""}
+                  onClick={() => setLegTab("dropOff")}
+                >
+                  Drop-off
+                </button>
+                <button
+                  type="button"
+                  className={legTab === "pickUp" ? "active" : ""}
+                  onClick={() => setLegTab("pickUp")}
+                >
+                  Pick-up
+                </button>
+              </div>
+              <div className="admin-leg-tabs admin-leg-view-tabs">
+                <button
+                  type="button"
+                  className={legViewMode === "kid" ? "active" : ""}
+                  onClick={() => setLegViewMode("kid")}
+                >
+                  By kid
+                </button>
+                <button
+                  type="button"
+                  className={legViewMode === "parent" ? "active" : ""}
+                  onClick={() => setLegViewMode("parent")}
+                >
+                  By parent
+                </button>
+              </div>
+            </div>
+            {legViewMode === "kid" ? (
+              <LegAssignments
+                carpool={liveEditingCarpool}
+                leg={legTab}
+                label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
+                onMoveKid={(kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)}
+              />
+            ) : (
+              <LegAssignmentsByParent
+                carpool={liveEditingCarpool}
+                leg={legTab}
+                label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
+                onMoveKid={(kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)}
+              />
+            )}
           </div>
         )}
       </SidePanel>

@@ -26,6 +26,84 @@ type Carpool = {
   createdAt: number;
 };
 
+// Keep a leg's car list in sync with a member's driving toggle: drop their
+// car if they can no longer drive it, or give them one (defaulting to their
+// own unclaimed kids) if they now can and don't have one yet. Mirrors
+// syncCar in carpools-join.mts so admin toggles behave the same as a member
+// flipping their own toggle.
+function syncCar(leg: Leg, member: Member, canDrive: boolean) {
+  leg.cars ??= [];
+  if (!canDrive) {
+    leg.cars = leg.cars.filter((c) => c.driverId !== member.id);
+    return;
+  }
+  const claimed = new Set(leg.cars.flatMap((c) => c.kids));
+  const unclaimedOwnKids = member.kids.filter((k) => !claimed.has(k));
+  const existing = leg.cars.find((c) => c.driverId === member.id);
+  if (existing) {
+    if (unclaimedOwnKids.length > 0) existing.kids = [...existing.kids, ...unclaimedOwnKids];
+    return;
+  }
+  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids });
+}
+
+// Mirrors moveKid in CarpoolDetail.tsx: pull the kid out of whatever car
+// they're currently in, then drop them into driverId's car (creating it if
+// the driver doesn't have one yet), or leave them unassigned if driverId is
+// null.
+function moveKidCar(cars: Car[], kid: string, driverId: string | null): Car[] {
+  const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
+  if (!driverId) return cleared;
+  if (!cleared.some((c) => c.driverId === driverId)) {
+    return [...cleared, { driverId, kids: [kid] }];
+  }
+  return cleared.map((c) => (c.driverId === driverId ? { ...c, kids: [...c.kids, kid] } : c));
+}
+
+function pairKey(a: string, b: string) {
+  return [a, b].sort().join("|");
+}
+
+// Mirrors backfillCoParentIntoCarpools in household-link.mts: retroactively
+// add the co-parent to any of ownerId's carpools where they share a kid, so
+// an admin-created link behaves the same as one a member makes themselves.
+async function backfillCoParentIntoCarpools(
+  store: ReturnType<typeof getStore>,
+  ownerId: string,
+  coParentId: string
+) {
+  const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
+  if (!coProfile) return;
+
+  const codes = ((await store.get(`member:${ownerId}`, { type: "json" })) as string[] | null) ?? [];
+  for (const code of codes) {
+    const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+    if (!carpool || carpool.members.some((m) => m.id === coParentId)) continue;
+
+    const owner = carpool.members.find((m) => m.id === ownerId);
+    if (!owner) continue;
+    const sharedKids = owner.kids.filter((k) => coProfile.kids.includes(k));
+    if (sharedKids.length === 0) continue;
+
+    carpool.members.push({
+      id: coParentId,
+      name: coProfile.name,
+      seats: coProfile.seats,
+      kids: sharedKids,
+      canDriveDropOff: false,
+      canDrivePickUp: false,
+      street: coProfile.street,
+      zip: coProfile.zip,
+    });
+    await store.setJSON(`code:${code}`, carpool);
+
+    const coParentCodes = ((await store.get(`member:${coParentId}`, { type: "json" })) as string[] | null) ?? [];
+    if (!coParentCodes.includes(code)) {
+      await store.setJSON(`member:${coParentId}`, [...coParentCodes, code]);
+    }
+  }
+}
+
 async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId: string, code: string) {
   const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
   await store.setJSON(`member:${memberId}`, codes.filter((c) => c !== code));
@@ -102,13 +180,84 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await store.delete(`member:${memberId}`);
       return new Response("ok");
     }
+    case "linkCoParents": {
+      const { memberId, coParentId } = body.payload as { memberId: string; coParentId: string };
+      if (memberId === coParentId) return new Response("Can't link a user to themselves", { status: 400 });
+      const [profileA, profileB] = await Promise.all([
+        store.get(`profile:${memberId}`, { type: "json" }),
+        store.get(`profile:${coParentId}`, { type: "json" }),
+      ]);
+      if (!profileA || !profileB) return new Response("User not found", { status: 404 });
+
+      await store.set(`coparent:${memberId}`, coParentId);
+      await store.set(`coparent:${coParentId}`, memberId);
+      await backfillCoParentIntoCarpools(store, memberId, coParentId);
+      await backfillCoParentIntoCarpools(store, coParentId, memberId);
+      return new Response("ok");
+    }
+    case "unlinkCoParents": {
+      const { memberId } = body.payload as { memberId: string };
+      const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
+      await store.delete(`coparent:${memberId}`);
+      if (coParentId) {
+        await store.delete(`coparent:${coParentId}`);
+        await store.delete(`combined:${pairKey(memberId, coParentId)}`);
+      }
+      return new Response("ok");
+    }
+    case "setHouseholdCombined": {
+      const { memberId, combined } = body.payload as { memberId: string; combined: boolean };
+      const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
+      if (!coParentId) return new Response("No linked co-parent", { status: 400 });
+      await store.set(`combined:${pairKey(memberId, coParentId)}`, combined ? "true" : "false");
+      return new Response("ok");
+    }
     case "updateCarpool": {
-      const { code, name, day, destination } = body.payload;
+      const { code, name, day, destination, dropOffTime, pickUpTime } = body.payload;
       const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
       if (!carpool) return new Response("Not found", { status: 404 });
       carpool.name = name;
       carpool.day = day;
       carpool.destination = destination;
+      carpool.dropOff ??= { time: "", cars: [] };
+      carpool.pickUp ??= { time: "", cars: [] };
+      if (dropOffTime !== undefined) carpool.dropOff.time = dropOffTime;
+      if (pickUpTime !== undefined) carpool.pickUp.time = pickUpTime;
+      await store.setJSON(`code:${code}`, carpool);
+      return new Response("ok");
+    }
+    case "setMemberDriving": {
+      const { code, memberId, leg, value } = body.payload as {
+        code: string;
+        memberId: string;
+        leg: "dropOff" | "pickUp";
+        value: boolean;
+      };
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      const member = carpool.members.find((m) => m.id === memberId);
+      if (!member) return new Response("Member not found", { status: 404 });
+      carpool.dropOff ??= { time: "", cars: [] };
+      carpool.pickUp ??= { time: "", cars: [] };
+      if (leg === "dropOff") member.canDriveDropOff = value;
+      else member.canDrivePickUp = value;
+      syncCar(leg === "dropOff" ? carpool.dropOff : carpool.pickUp, member, value);
+      await store.setJSON(`code:${code}`, carpool);
+      return new Response("ok");
+    }
+    case "moveKid": {
+      const { code, leg, kid, driverId } = body.payload as {
+        code: string;
+        leg: "dropOff" | "pickUp";
+        kid: string;
+        driverId: string | null;
+      };
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      carpool.dropOff ??= { time: "", cars: [] };
+      carpool.pickUp ??= { time: "", cars: [] };
+      const target = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
+      target.cars = moveKidCar(target.cars ?? [], kid, driverId);
       await store.setJSON(`code:${code}`, carpool);
       return new Response("ok");
     }
@@ -178,7 +327,18 @@ export default async (req: Request) => {
       profileBlobs.map(async (b) => {
         const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
         if (!profile) return null;
-        return { memberId: b.key.slice("profile:".length), ...profile };
+        const memberId = b.key.slice("profile:".length);
+
+        const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
+        let coParentName: string | null = null;
+        let householdCombined = false;
+        if (coParentId) {
+          const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
+          coParentName = coProfile?.name ?? null;
+          householdCombined = (await store.get(`combined:${pairKey(memberId, coParentId)}`)) === "true";
+        }
+
+        return { memberId, ...profile, coParentId, coParentName, householdCombined };
       })
     )
   ).filter(Boolean);
