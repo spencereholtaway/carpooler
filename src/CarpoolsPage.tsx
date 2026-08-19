@@ -61,7 +61,14 @@ function groupByDay(carpools: Carpool[]): DayGroup[] {
     buckets.get(day)!.push(c);
   }
   const order: (DayOfWeek | null)[] = [...DAYS_OF_WEEK, null];
-  return order.filter((day) => buckets.has(day)).map((day) => ({ day, carpools: buckets.get(day)! }));
+  return order
+    .filter((day) => buckets.has(day))
+    .map((day) => ({
+      day,
+      carpools: [...buckets.get(day)!].sort((a, b) =>
+        (a.dropOff.time || "24:00").localeCompare(b.dropOff.time || "24:00")
+      ),
+    }));
 }
 
 export function CarpoolsPage({
@@ -190,7 +197,9 @@ export function CarpoolsPage({
 
   const dayGroups = groupByDay(carpools);
   const today = DAYS_OF_WEEK[(new Date().getDay() + 6) % 7];
-  const todayCarpools = carpools.filter((c) => c.day === today);
+  const todayCarpools = carpools
+    .filter((c) => c.day === today)
+    .sort((a, b) => (a.dropOff.time || "24:00").localeCompare(b.dropOff.time || "24:00"));
 
   return (
     <div className="carpools-page">
