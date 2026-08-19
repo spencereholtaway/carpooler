@@ -231,7 +231,7 @@ function DrivingLeg({
         <span className="driving-leg-time muted">{formatTime(time)}</span>
       </div>
       <div className="driving-row-list">
-        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids, displayName }) => {
+        {rows.map(({ m, kids, eligible, free, isCoParent, canMoveHere, movableKids, displayName }) => {
           const expanded = canMoveHere && expandedRow === m.id;
           const closing = canMoveHere && closingRow === m.id;
           const multiPick = movableKids.length > 1;
