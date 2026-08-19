@@ -62,7 +62,8 @@ function legSentences(
   selfKids: string[],
   members: Member[],
   drivenBySelf: string[],
-  bothWaysKids: string[]
+  bothWaysKids: string[],
+  bothWaysByDriver: Map<string, string[]>
 ): string[] {
   const sentences: string[] = [];
   const soloKids = drivenBySelf.filter((k) => !bothWaysKids.includes(k));
@@ -80,6 +81,8 @@ function legSentences(
     if (drivenBySelf.includes(kid)) continue;
     const driverId = kidToDriver.get(kid);
     if (driverId) {
+      // Already covered by that driver's own dedicated "both ways" line.
+      if (bothWaysByDriver.get(driverId)?.includes(kid)) continue;
       if (!otherGroups.has(driverId)) otherGroups.set(driverId, []);
       otherGroups.get(driverId)!.push(kid);
     } else {
@@ -102,8 +105,9 @@ function legSentences(
 
 // The blisspoolAI line(s) for a carpool from this member's point of view,
 // joined with "\n" — shared between the full carpool detail view and the
-// compact carpools list. Kids self drives on both legs get a combined
-// "both ways" line instead of two separate ones.
+// compact carpools list. Any driver (self or someone else) covering both
+// legs for the same kid gets a combined "both ways" line instead of two
+// separate ones.
 export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   const self = carpool.members.find((m) => m.id === memberId);
   if (!self) return "";
@@ -114,14 +118,31 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   const dropOffDrivers = resolveKidDrivers(carpool.dropOff?.cars ?? [], carpool.members, kidDefaults);
   const pickUpDrivers = resolveKidDrivers(carpool.pickUp?.cars ?? [], carpool.members, kidDefaults);
 
+  const driverIds = new Set([...dropOffDrivers.values(), ...pickUpDrivers.values()]);
+  const bothWaysByDriver = new Map<string, string[]>();
+  for (const driverId of driverIds) {
+    const kids = allCarpoolKids.filter(
+      (k) => dropOffDrivers.get(k) === driverId && pickUpDrivers.get(k) === driverId
+    );
+    if (kids.length > 0) bothWaysByDriver.set(driverId, kids);
+  }
+
   const dropOffSelf = allCarpoolKids.filter((k) => dropOffDrivers.get(k) === memberId);
   const pickUpSelf = allCarpoolKids.filter((k) => pickUpDrivers.get(k) === memberId);
-  const bothWaysKids = dropOffSelf.filter((k) => pickUpSelf.includes(k));
+  const bothWaysKids = bothWaysByDriver.get(memberId) ?? [];
+
+  const otherBothWaysLines = [...bothWaysByDriver.entries()]
+    .filter(([driverId]) => driverId !== memberId)
+    .map(([driverId, kids]) => {
+      const name = carpool.members.find((m) => m.id === driverId)?.name ?? "Someone";
+      return `${name} is driving ${joinList(kids)} both ways.`;
+    });
 
   return [
     bothWaysKids.length > 0 ? `You're driving ${joinList(bothWaysKids)} both ways.` : "",
-    legSentences(dropOffDrivers, "dropOff", self.kids, carpool.members, dropOffSelf, bothWaysKids).join(" "),
-    legSentences(pickUpDrivers, "pickUp", self.kids, carpool.members, pickUpSelf, bothWaysKids).join(" "),
+    ...otherBothWaysLines,
+    legSentences(dropOffDrivers, "dropOff", self.kids, carpool.members, dropOffSelf, bothWaysKids, bothWaysByDriver).join(" "),
+    legSentences(pickUpDrivers, "pickUp", self.kids, carpool.members, pickUpSelf, bothWaysKids, bothWaysByDriver).join(" "),
   ]
     .filter(Boolean)
     .join("\n");
