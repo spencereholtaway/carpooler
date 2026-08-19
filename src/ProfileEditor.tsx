@@ -120,7 +120,7 @@ export function ProfileEditor({
 
       <form className="profile-editor-form" onSubmit={handleSubmit}>
         <div className="mini-form">
-          <h3>Name</h3>
+          <h4>Name</h4>
           <input value={name} onChange={(e) => setName(e.target.value)} required />
           {nameError && <p className="form-error">{nameError}</p>}
         </div>
@@ -155,7 +155,7 @@ export function ProfileEditor({
         </div>
 
         <div className="mini-form">
-          <h3>Address</h3>
+          <h4>Address</h4>
           <div className="form-field">
             <span className="gate-field-label">Street address</span>
             <input value={street} onChange={(e) => setStreet(e.target.value)} />
@@ -167,7 +167,7 @@ export function ProfileEditor({
         </div>
 
         <div className="mini-form">
-          <h3>Your kids</h3>
+          <h4>Your kids</h4>
           <div className="kid-input-row">
             <input
               placeholder="Kid's name, then Enter"
@@ -195,7 +195,7 @@ export function ProfileEditor({
         </div>
 
         <div className="mini-form">
-          <h3>Free seats in your car</h3>
+          <h4>Free seats in your car</h4>
           <div className="seat-stepper">
             <button
               type="button"

@@ -89,13 +89,14 @@ export async function updateCarpoolSchedule(
   day: DayOfWeek,
   destination: Address,
   dropOff: Leg,
-  pickUp: Leg
+  pickUp: Leg,
+  name?: string
 ): Promise<Carpool> {
   return unwrap(
     await fetch("/api/carpools/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, day, destination, dropOff, pickUp }),
+      body: JSON.stringify({ code, day, destination, dropOff, pickUp, name }),
     })
   );
 }

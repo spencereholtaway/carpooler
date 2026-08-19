@@ -35,12 +35,43 @@ body {
   padding: 0 16px 48px;
 }
 
+@media (max-width: 380px) {
+  #root {
+    padding: 0 10px 48px;
+  }
+
+  .mini-form {
+    padding: 16px;
+  }
+}
+
 h1,
 h2,
 h3 {
+  margin: 0;
   font-family: var(--serif);
   color: var(--text-h);
   font-weight: 500;
+}
+
+h1 {
+  font-size: 30px;
+}
+
+h2 {
+  font-size: 22px;
+}
+
+h3 {
+  font-size: 17px;
+}
+
+h4 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 p {
@@ -348,6 +379,10 @@ button {
   gap: 12px;
   width: 100%;
   margin-top: 6px;
+}
+
+.gate-form-with-footer {
+  padding-bottom: 72px;
 }
 
 .gate-input {
@@ -693,6 +728,7 @@ button {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(139, 123, 184, 0.1);
+  text-align: left;
 }
 
 .mini-form.primary {
@@ -781,10 +817,105 @@ button {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  text-align: center;
+}
+
+.carpool-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  text-align: left;
+}
+
+.carpool-name-row h2 {
+  margin: 0;
+}
+
+.carpool-kids-line {
+  margin: -12px 0 0;
+  text-align: left;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(56, 47, 74, 0.32);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: fade-in 0.2s ease both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -16px 40px rgba(139, 123, 184, 0.24);
+  animation: sheet-up 0.28s var(--ease-smooth) both;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.bottom-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.bottom-sheet-header h3 {
+  margin: 0;
+}
+
+.bottom-sheet-body {
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bottom-sheet-footer {
+  flex: none;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.bottom-sheet-footer .pill-button {
+  width: 100%;
 }
 
 .back-link {
   align-self: flex-start;
+  text-align: left;
   background: none;
   border: none;
   color: var(--accent);
@@ -902,8 +1033,132 @@ button {
   text-decoration: underline;
 }
 
+.schedule-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.carpool-detail .bliss-heading {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 26px;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.carpool-detail > h3.bliss-heading {
+  margin-top: 27px;
+}
+
 .schedule-summary p {
   margin: 4px 0;
+}
+
+.schedule-summary-heading {
+  text-align: center;
+}
+
+.schedule-legs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.leg-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.leg-toggle-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.leg-toggle-row.checked {
+  border-color: var(--accent);
+  background: rgba(139, 123, 184, 0.08);
+}
+
+.leg-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.leg-toggle-info strong {
+  color: var(--text-h);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.leg-toggle-info .muted {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.leg-check-group {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.leg-check-label {
+  font-size: 13px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.leg-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  color: #fff;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.leg-toggle-row.checked .leg-check {
+  background: linear-gradient(100deg, #8b7bb8, #c98fa6);
+  border-color: transparent;
+}
+
+.driving-leg-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.driving-leg-header h3 {
+  margin: 0;
+}
+
+.driving-leg-header .bliss-heading {
+  font-size: 20px;
+}
+
+.driving-leg-time {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .driving-badge {
@@ -919,43 +1174,120 @@ button {
   vertical-align: middle;
 }
 
-.driving-toggle {
+.move-kid-control {
+  position: relative;
+}
+
+.move-kid-trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: var(--text-h);
-  cursor: pointer;
+  justify-content: center;
+  gap: 12px;
 }
 
-.driving-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-  cursor: pointer;
+.move-kid-dialog {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: var(--card-bg);
+  box-shadow: 0 16px 36px rgba(139, 123, 184, 0.22);
 }
 
-.car-assign-list {
+.move-kid-dialog .pill-button {
+  align-self: flex-end;
+}
+
+.driving-row-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.car-assign-row {
+.driving-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+.driving-row.tappable {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.driving-row.tappable:hover {
+  border-color: var(--accent);
+  background: rgba(139, 123, 184, 0.06);
+}
+
+.driving-row-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
 
-.car-assign-row span {
-  font-size: 14px;
+.driving-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.driving-row-main strong {
   color: var(--text-h);
+  font-size: 15px;
 }
 
-.car-assign-row select {
-  width: auto;
-  min-width: 140px;
+.driving-row-kids {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.my-kid-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(100deg, #8b7bb8, #c98fa6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.move-here-button {
+  width: 100%;
+  animation: pop-in 0.25s var(--ease-bounce) both;
+}
+
+.seat-status {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.seat-status.off {
+  color: var(--text);
+  font-weight: 400;
+  font-style: italic;
 }
 
 /* --- admin: deliberately plain/generic, not the app's ethereal look --- */

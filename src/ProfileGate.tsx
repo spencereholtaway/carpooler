@@ -130,6 +130,7 @@ export function ProfileGate({
   }
 
   return (
+    <>
     <div className="gate-card pop-in">
       <span className="gate-step">Step 2 of 2</span>
       <h2 className="gate-heading">
@@ -147,7 +148,7 @@ export function ProfileGate({
           Linked as a co-parent with <strong>{coParentName}</strong> — their kids are pre-filled below.
         </p>
       )}
-      <form className="gate-form" onSubmit={handleFinish}>
+      <form id="gate-step2-form" className="gate-form gate-form-with-footer" onSubmit={handleFinish}>
         <div className="gate-field">
           <span className="gate-field-label">Your kids</span>
           <div className="kid-input-row">
@@ -200,7 +201,7 @@ export function ProfileGate({
         </div>
 
         <div className="gate-field">
-          <span className="gate-field-label">Free seats in your car</span>
+          <span className="gate-field-label">How many extra kids can you drive?</span>
           <div className="seat-stepper">
             <button
               type="button"
@@ -220,10 +221,13 @@ export function ProfileGate({
           </div>
         </div>
 
-        <button type="submit" className="pill-button">
-          {returning ? "That's me →" : "Parental Synergistic Bliss →"}
-        </button>
       </form>
     </div>
+    <div className="floating-save-bar">
+      <button type="submit" form="gate-step2-form" className="pill-button">
+        {returning ? "That's me →" : "Parental Synergistic Bliss →"}
+      </button>
+    </div>
+    </>
   );
 }

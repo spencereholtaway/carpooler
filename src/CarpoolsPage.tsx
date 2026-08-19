@@ -228,7 +228,7 @@ export function CarpoolsPage({
                 </div>
 
                 <div className="mini-form">
-                  <h3>Day</h3>
+                  <h4>Day</h4>
                   <select value={day} onChange={(e) => setDay(e.target.value as DayOfWeek)}>
                     {DAYS_OF_WEEK.map((d) => (
                       <option key={d} value={d}>
@@ -239,7 +239,7 @@ export function CarpoolsPage({
                 </div>
 
                 <div className="mini-form">
-                  <h3>Destination</h3>
+                  <h4>Destination</h4>
                   <div className="form-field">
                     <span className="gate-field-label">Street address</span>
                     <input value={destStreet} onChange={(e) => setDestStreet(e.target.value)} />
@@ -255,7 +255,7 @@ export function CarpoolsPage({
                 </div>
 
                 <div className="mini-form">
-                  <h3>Drop-off time</h3>
+                  <h4>Drop-off time</h4>
                   <input
                     type="time"
                     value={dropOffTime}
@@ -265,7 +265,7 @@ export function CarpoolsPage({
                 </div>
 
                 <div className="mini-form">
-                  <h3>Pick-up time</h3>
+                  <h4>Pick-up time</h4>
                   <input
                     type="time"
                     value={pickUpTime}

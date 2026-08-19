@@ -33,12 +33,13 @@ function sanitizeLeg(leg: Leg | undefined, eligibleDriverIds: Set<string>): Leg 
 export default async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const { code, day, destination, dropOff, pickUp } = (await req.json()) as {
+  const { code, day, destination, dropOff, pickUp, name } = (await req.json()) as {
     code: string;
     day: string;
     destination: Address;
     dropOff: Leg;
     pickUp: Leg;
+    name?: string;
   };
   if (!code || !day) return new Response("Missing fields", { status: 400 });
 
@@ -53,6 +54,7 @@ export default async (req: Request) => {
     carpool.members.filter((m) => m.canDrivePickUp).map((m) => m.id)
   );
 
+  if (name && name.trim()) carpool.name = name.trim();
   carpool.day = day;
   carpool.destination = { street: destination?.street ?? "", zip: destination?.zip ?? "" };
   carpool.dropOff = sanitizeLeg(dropOff, dropOffEligible);
