@@ -1,17 +1,20 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined } from "./api";
 import type { LocalProfile } from "./useProfile";
+import type { Carpool } from "./types";
 import { BottomSheet } from "./BottomSheet";
 
 export function ProfileEditor({
   memberId,
   profile,
   onSaved,
+  onCarpoolUpdated,
   onClose,
 }: {
   memberId: string;
   profile: LocalProfile;
   onSaved: (profile: LocalProfile) => void;
+  onCarpoolUpdated: (carpool: Carpool) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(profile.name);
@@ -102,18 +105,22 @@ export function ProfileEditor({
 
       // Keep every carpool's copy of this member's info in sync (each carpool's
       // kids/driving stay as they were there — only shared profile fields change).
+      // Also feed each result back up so an already-open carpool (e.g. the one
+      // this edit was opened from) doesn't keep showing pre-edit values like
+      // seats until the user navigates away and back.
       const carpools = await listCarpools(memberId);
       await Promise.all(
-        carpools.map((c) => {
+        carpools.map(async (c) => {
           const self = c.members.find((m) => m.id === memberId);
-          if (!self) return Promise.resolve();
-          return joinCarpool(c.code, {
+          if (!self) return;
+          const updatedCarpool = await joinCarpool(c.code, {
             ...self,
             name: updated.name,
             seats: updated.seats,
             street: updated.street,
             zip: updated.zip,
           });
+          onCarpoolUpdated(updatedCarpool);
         })
       );
 

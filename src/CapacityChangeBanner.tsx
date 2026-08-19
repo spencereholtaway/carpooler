@@ -12,15 +12,23 @@ export function CapacityChangeBanner() {
     setDismissed(true);
   };
 
+  const message =
+    "We updated how car capacity works - please check your numbers by clicking your name in the top-right of the screen.";
+
   return (
-    <div className="capacity-banner pop-in">
-      <p>
-        We updated how car capacity works - please check your numbers by clicking your name in
-        the top-right of the screen.
-      </p>
-      <button type="button" onClick={dismiss} aria-label="Dismiss">
-        &times;
-      </button>
-    </div>
+    <>
+      <div className="capacity-banner capacity-banner-mobile-only pop-in">
+        <p>{message}</p>
+        <button type="button" onClick={dismiss} aria-label="Dismiss">
+          &times;
+        </button>
+      </div>
+      <div className="capacity-banner-bar capacity-banner-desktop-only">
+        <p>{message}</p>
+        <button type="button" onClick={dismiss} aria-label="Dismiss">
+          &times;
+        </button>
+      </div>
+    </>
   );
 }

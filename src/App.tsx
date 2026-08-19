@@ -76,6 +76,18 @@ function App() {
     });
   };
 
+  // Same cache refresh as upsertCarpool, but never navigates — used when a
+  // profile edit re-syncs every carpool the member is in, which may include
+  // carpools other than (or none of) whichever one is currently open.
+  const refreshCarpool = (updated: Carpool) => {
+    setSelectedCarpool((prev) => (prev && prev.code === updated.code ? updated : prev));
+    setCarpools((prev) => {
+      if (!prev) return prev;
+      const exists = prev.some((c) => c.code === updated.code);
+      return exists ? prev.map((c) => (c.code === updated.code ? updated : c)) : [...prev, updated];
+    });
+  };
+
   if (window.location.pathname === "/admin") {
     return <AdminPage />;
   }
@@ -162,6 +174,7 @@ function App() {
           memberId={memberId}
           profile={profile}
           onSaved={saveProfile}
+          onCarpoolUpdated={refreshCarpool}
           onClose={() => setEditingProfile(false)}
         />
       )}
