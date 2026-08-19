@@ -86,7 +86,7 @@ function App() {
     );
   }
 
-  const wide = selectedCarpool && !editingProfile;
+  const wide = Boolean(selectedCarpool);
 
   return (
     <div className="app-shell">
@@ -123,14 +123,7 @@ function App() {
         </div>
       </div>
       <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
-        {editingProfile ? (
-          <ProfileEditor
-            memberId={memberId}
-            profile={profile}
-            onSaved={saveProfile}
-            onClose={() => setEditingProfile(false)}
-          />
-        ) : selectedCarpool ? (
+        {selectedCarpool ? (
           <CarpoolDetail
             carpool={selectedCarpool}
             memberId={memberId}
@@ -142,6 +135,14 @@ function App() {
           <CarpoolsPage memberId={memberId} profile={profile} onOpenCarpool={setSelectedCarpool} />
         )}
       </main>
+      {editingProfile && (
+        <ProfileEditor
+          memberId={memberId}
+          profile={profile}
+          onSaved={saveProfile}
+          onClose={() => setEditingProfile(false)}
+        />
+      )}
     </div>
   );
 }

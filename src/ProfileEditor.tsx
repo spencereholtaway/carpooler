@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined } from "./api";
 import type { LocalProfile } from "./useProfile";
+import { BottomSheet } from "./BottomSheet";
 
 export function ProfileEditor({
   memberId,
@@ -72,8 +73,7 @@ export function ProfileEditor({
     setKids((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
     if (kids.length === 0) {
@@ -125,128 +125,124 @@ export function ProfileEditor({
   };
 
   return (
-    <div className="carpool-detail">
-      <button className="back-link" onClick={onClose}>
-        &larr; Back
-      </button>
-      <h2>Your profile</h2>
+    <BottomSheet
+      open
+      onClose={onClose}
+      title="Your profile"
+      footer={
+        <button type="button" className="pill-button" onClick={handleSubmit} disabled={saving}>
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+      }
+    >
+      <div className="mini-form">
+        <h4>Name</h4>
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
+        {nameError && <p className="form-error">{nameError}</p>}
+      </div>
 
-      <form className="profile-editor-form" onSubmit={handleSubmit}>
-        <div className="mini-form">
-          <h4>Name</h4>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-          {nameError && <p className="form-error">{nameError}</p>}
-        </div>
-
-        <div className="invite-box">
-          {household?.coParentName ? (
-            <>
-              <span className="invite-label">Linked co-parent</span>
-              <span className="invite-code linked-coparent-name">{household.coParentName}</span>
-              <p className="muted">
-                When either of you joins or starts a carpool for a shared kid, the other is added
-                automatically (driving stays a separate choice for each of you).
-              </p>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={household.combined}
-                  disabled={savingCombined}
-                  onChange={toggleCombined}
-                />
-                We share driving as one household
-              </label>
-              <p className="muted">
-                Marks you as a combined household in shared carpools, instead of treating each of
-                you as a separate default driver.
-              </p>
-            </>
-          ) : (
-            <>
-              <span className="invite-label">Invite your co-parent</span>
-              <span className="invite-code">{household?.code ?? "······"}</span>
-              <p className="muted">
-                Once linked, joining or starting a carpool for a shared kid adds both of you.
-              </p>
-              <button
-                type="button"
-                className="pill-button secondary"
-                onClick={copyCoParentLink}
-                disabled={!household}
-              >
-                {copied ? "Copied!" : "Copy invite link for co-parent"}
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="mini-form">
-          <h4>Address</h4>
-          <div className="form-field">
-            <span className="gate-field-label">Street address</span>
-            <input value={street} onChange={(e) => setStreet(e.target.value)} />
-          </div>
-          <div className="form-field">
-            <span className="gate-field-label">Zip code</span>
-            <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
-          </div>
-        </div>
-
-        <div className="mini-form">
-          <h4>Your kids</h4>
-          <div className="kid-input-row">
-            <input
-              placeholder="Kid's name, then Enter"
-              value={kidInput}
-              onChange={(e) => setKidInput(e.target.value)}
-              onKeyDown={handleKidKeyDown}
-            />
-            <button type="button" className="pill-button secondary small" onClick={addKid}>
-              Add
-            </button>
-          </div>
-          {kids.length > 0 && (
-            <div className="kid-tags">
-              {kids.map((kid, i) => (
-                <span className="kid-tag pop-in" key={`${kid}-${i}`}>
-                  {kid}
-                  <button type="button" onClick={() => removeKid(i)} aria-label={`Remove ${kid}`}>
-                    &times;
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          {kidsError && <p className="form-error">{kidsError}</p>}
-        </div>
-
-        <div className="mini-form">
-          <h4>Free seats in your car</h4>
-          <div className="seat-stepper">
+      <div className="invite-box">
+        {household?.coParentName ? (
+          <>
+            <span className="invite-label">Linked co-parent</span>
+            <span className="invite-code linked-coparent-name">{household.coParentName}</span>
+            <p className="muted">
+              When either of you joins or starts a carpool for a shared kid, the other is added
+              automatically (driving stays a separate choice for each of you).
+            </p>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={household.combined}
+                disabled={savingCombined}
+                onChange={toggleCombined}
+              />
+              We share driving as one household
+            </label>
+            <p className="muted">
+              Marks you as a combined household in shared carpools, instead of treating each of
+              you as a separate default driver.
+            </p>
+          </>
+        ) : (
+          <>
+            <span className="invite-label">Invite your co-parent</span>
+            <span className="invite-code">{household?.code ?? "······"}</span>
+            <p className="muted">
+              Once linked, joining or starting a carpool for a shared kid adds both of you.
+            </p>
             <button
               type="button"
-              onClick={() => setSeats((s) => Math.max(0, s - 1))}
-              aria-label="Fewer seats"
+              className="pill-button secondary"
+              onClick={copyCoParentLink}
+              disabled={!household}
             >
-              &minus;
+              {copied ? "Copied!" : "Copy invite link for co-parent"}
             </button>
-            <span className="seat-count">{seats}</span>
-            <button
-              type="button"
-              onClick={() => setSeats((s) => Math.min(8, s + 1))}
-              aria-label="More seats"
-            >
-              +
-            </button>
-          </div>
-        </div>
+          </>
+        )}
+      </div>
 
-        <div className="floating-save-bar">
-          <button type="submit" className="pill-button" disabled={saving}>
-            {saving ? "Saving..." : "Save changes"}
+      <div className="mini-form">
+        <h4>Address</h4>
+        <div className="form-field">
+          <span className="gate-field-label">Street address</span>
+          <input value={street} onChange={(e) => setStreet(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Zip code</span>
+          <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
+        </div>
+      </div>
+
+      <div className="mini-form">
+        <h4>Your kids</h4>
+        <div className="kid-input-row">
+          <input
+            placeholder="Kid's name, then Enter"
+            value={kidInput}
+            onChange={(e) => setKidInput(e.target.value)}
+            onKeyDown={handleKidKeyDown}
+          />
+          <button type="button" className="pill-button secondary small" onClick={addKid}>
+            Add
           </button>
         </div>
-      </form>
-    </div>
+        {kids.length > 0 && (
+          <div className="kid-tags">
+            {kids.map((kid, i) => (
+              <span className="kid-tag pop-in" key={`${kid}-${i}`}>
+                {kid}
+                <button type="button" onClick={() => removeKid(i)} aria-label={`Remove ${kid}`}>
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {kidsError && <p className="form-error">{kidsError}</p>}
+      </div>
+
+      <div className="mini-form">
+        <h4>Free seats in your car</h4>
+        <div className="seat-stepper">
+          <button
+            type="button"
+            onClick={() => setSeats((s) => Math.max(0, s - 1))}
+            aria-label="Fewer seats"
+          >
+            &minus;
+          </button>
+          <span className="seat-count">{seats}</span>
+          <button
+            type="button"
+            onClick={() => setSeats((s) => Math.min(8, s + 1))}
+            aria-label="More seats"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
   );
 }

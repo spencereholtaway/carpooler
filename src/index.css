@@ -163,7 +163,7 @@ p {
   margin: 0;
 }
 
-input {
+input:not([type="checkbox"]) {
   width: 100%;
   font: inherit;
   padding: 10px 14px;
@@ -174,7 +174,7 @@ input {
   outline: none;
 }
 
-input:focus {
+input:not([type="checkbox"]):focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px rgba(139, 123, 184, 0.15);
 }
@@ -1329,6 +1329,14 @@ button {
   font-size: 14px;
   color: var(--text);
   cursor: pointer;
+  text-align: left;
+}
+
+.checkbox-row input[type="checkbox"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 
 .invite-label {
@@ -1378,13 +1386,6 @@ button {
 .member-meta {
   font-size: 13px;
   color: var(--text);
-}
-
-.profile-editor-form {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding-bottom: 96px;
 }
 
 .floating-save-bar {
