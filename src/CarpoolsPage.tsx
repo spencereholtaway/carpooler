@@ -13,12 +13,22 @@ function TodayCarpoolRow({
   carpool,
   summary,
   onOpen,
+  start,
+  onDone,
+  showCursor,
 }: {
   carpool: Carpool;
   summary: string;
   onOpen: () => void;
+  start: boolean;
+  onDone: () => void;
+  showCursor: boolean;
 }) {
-  const { display, done } = useTypewriter(summary);
+  const { display, done } = useTypewriter(summary, 30, start);
+  useEffect(() => {
+    if (done) onDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
   const lines = display.split("\n");
   return (
     <button className="today-carpool" onClick={onOpen}>
@@ -30,7 +40,7 @@ function TodayCarpoolRow({
         {lines.map((line, i) => (
           <p key={i}>
             {line}
-            {i === lines.length - 1 && (
+            {showCursor && i === lines.length - 1 && (
               <span className={`ai-summary-cursor ${done ? "" : "typing"}`} aria-hidden="true" />
             )}
           </p>
@@ -82,6 +92,7 @@ export function CarpoolsPage({
 }) {
   const [carpools, setCarpools] = useState<Carpool[]>([]);
   const [loading, setLoading] = useState(true);
+  const [typedCount, setTypedCount] = useState(0);
   const cameViaInviteLink = useRef(
     /^\d{6}$/.test(new URLSearchParams(window.location.search).get("join") ?? "")
   ).current;
@@ -210,12 +221,15 @@ export function CarpoolsPage({
       {!loading && todayCarpools.length > 0 && (
         <section className="today-summary">
           <span className="carpool-row-meta carpool-day-label">Today</span>
-          {todayCarpools.map((c) => (
+          {todayCarpools.map((c, i) => (
             <TodayCarpoolRow
               key={c.code}
               carpool={c}
               summary={summarizeCarpool(c, memberId) || "Nothing arranged yet."}
               onOpen={() => onOpenCarpool(c)}
+              start={i <= typedCount}
+              onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
+              showCursor={i === todayCarpools.length - 1}
             />
           ))}
         </section>

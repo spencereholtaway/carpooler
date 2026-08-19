@@ -108,6 +108,25 @@ export default async (req: Request) => {
     carpool.members[existingIndex] = member;
   }
 
+  // A coparent row that was auto-added on this member's behalf (see
+  // autoAddCoParent below) is a snapshot, not an independent choice — keep it
+  // in step with this member's current kids rather than letting a kid who
+  // was removed here linger under the coparent's row forever.
+  if (!isNewJoin && member.coparentId) {
+    const coIndex = carpool.members.findIndex((m) => m.id === member.coparentId);
+    if (coIndex !== -1 && carpool.members[coIndex].coparentId === member.id) {
+      const coProfile = (await store.get(`profile:${member.coparentId}`, { type: "json" })) as
+        | ServerProfile
+        | null;
+      if (coProfile) {
+        carpool.members[coIndex] = {
+          ...carpool.members[coIndex],
+          kids: member.kids.filter((k) => coProfile.kids.includes(k)),
+        };
+      }
+    }
+  }
+
   carpool.dropOff ??= { time: "", cars: [] };
   carpool.pickUp ??= { time: "", cars: [] };
 

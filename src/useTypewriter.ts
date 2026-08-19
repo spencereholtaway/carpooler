@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 // changes, instead of just popping in fully formed. Pace varies per
 // character — with a lingering beat after spaces and punctuation — so it
 // reads like someone typing rather than a metronome.
-export function useTypewriter(text: string, baseSpeed = 30): { display: string; done: boolean } {
+export function useTypewriter(
+  text: string,
+  baseSpeed = 30,
+  start = true,
+): { display: string; done: boolean } {
   const [display, setDisplay] = useState("");
   useEffect(() => {
     setDisplay("");
-    if (!text) return;
+    if (!text || !start) return;
     let i = 0;
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -35,6 +39,6 @@ export function useTypewriter(text: string, baseSpeed = 30): { display: string; 
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { display, done: display.length === text.length };
+  }, [text, start]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { display, done: start && display.length === text.length };
 }
