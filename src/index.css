@@ -497,6 +497,14 @@ button {
   color: var(--text);
 }
 
+.gate-field-label-bold {
+  font-weight: 600;
+}
+
+.gate-field .subtext {
+  margin-top: -4px;
+}
+
 .seat-stepper {
   display: flex;
   align-items: center;

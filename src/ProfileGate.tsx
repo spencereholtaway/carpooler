@@ -201,7 +201,11 @@ export function ProfileGate({
         </div>
 
         <div className="gate-field">
-          <span className="gate-field-label">How many extra kids can you drive?</span>
+          <span className="gate-field-label gate-field-label-bold">Free seats in your car</span>
+          <p className="subtext">
+            How many extra kids can you carry? These seats will only be open if you sign up to
+            drive in a carpool you're a part of.
+          </p>
           <div className="seat-stepper">
             <button
               type="button"
