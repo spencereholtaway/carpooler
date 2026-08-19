@@ -224,10 +224,12 @@ export function ProfileGate({
         </div>
 
         <div className="gate-field">
-          <span className="gate-field-label gate-field-label-bold">Free seats in your car</span>
+          <span className="gate-field-label gate-field-label-bold">
+            How many kids can you carry in your car, including your own?
+          </span>
           <p className="subtext">
-            How many extra kids can you carry? These seats will only be open if you sign up to
-            drive in a carpool you're a part of.
+            We'll work out how many seats that leaves for others based on who's riding with you
+            in a given carpool.
           </p>
           <div className="seat-stepper">
             <button

@@ -305,6 +305,48 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await removeCodeFromMember(store, memberId, code);
       return new Response("ok");
     }
+    // One-time backfill for the seats -> capacity change: `seats` used to mean
+    // "free seats for other people's kids" (a driver's own kids never
+    // consumed one); now it means total car capacity including the driver's
+    // own kids. Old values are reinterpreted as capacity = oldSeats +
+    // ownKidCount, both in each profile and in every carpool's denormalized
+    // copy of that member's row. Idempotent: records itself under
+    // "meta:capacityBackfill" and no-ops on a second run unless forced.
+    case "backfillCapacity": {
+      const already = (await store.get("meta:capacityBackfill")) as string | null;
+      if (already && !body.payload?.force) {
+        return new Response(JSON.stringify({ skipped: true, ranAt: already }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
+      let updated = 0;
+      for (const b of profileBlobs) {
+        const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
+        if (!profile) continue;
+        const newSeats = profile.seats + profile.kids.length;
+        if (newSeats === profile.seats) continue;
+
+        const memberId = b.key.slice("profile:".length);
+        await store.setJSON(b.key, { ...profile, seats: newSeats });
+
+        const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+        for (const code of codes) {
+          const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+          const m = carpool?.members.find((mm) => mm.id === memberId);
+          if (!carpool || !m) continue;
+          m.seats = newSeats;
+          await store.setJSON(`code:${code}`, carpool);
+        }
+        updated++;
+      }
+
+      await store.set("meta:capacityBackfill", new Date().toISOString());
+      return new Response(JSON.stringify({ updated }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     default:
       return new Response("Unknown action", { status: 400 });
   }

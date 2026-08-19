@@ -192,10 +192,9 @@ function DrivingLeg({
       ? car.kids
       : m.kids.filter((k) => !assignedElsewhere.has(k) && kidDefaults.get(k) === m.id);
     const eligible = eligibleFor(m);
-    // A member's seat count is already "free seats for other people's kids" —
-    // their own kid(s) riding along don't eat into it.
-    const others = kids.filter((k) => !m.kids.includes(k)).length;
-    const free = eligible ? Math.max(m.seats - others, 0) : 0;
+    // A member's seat count is total car capacity, including their own
+    // kid(s) — every kid riding along counts against it.
+    const free = eligible ? Math.max(m.seats - kids.length, 0) : 0;
     const isSelf = m.id === memberId;
     const isCoParent = m.id === coParentId;
     // A parent can always move their own kid into their own car or their
@@ -270,29 +269,26 @@ function DrivingLeg({
 
           // Selecting past this car's free-seat capacity swaps in the new
           // kid for the oldest one already picked (with a note explaining
-          // why) rather than silently refusing — a kid's own parent riding
-          // along never counts against the driver's seats.
+          // why) rather than silently refusing — every kid, including the
+          // driver's own, counts against capacity now.
           const toggleSelect = (kid: string) => {
-            const costsSeat = !m.kids.includes(kid);
             setSelectedKids((prev) => {
               if (prev.includes(kid)) {
                 setMoveError(null);
                 return prev.filter((k) => k !== kid);
               }
-              const usedSeats = prev.filter((k) => !m.kids.includes(k)).length;
-              if (costsSeat && usedSeats >= free) {
-                const evictIndex = prev.findIndex((k) => !m.kids.includes(k));
-                if (evictIndex === -1) {
+              if (prev.length >= free) {
+                if (prev.length === 0) {
                   setMoveError(
                     free === 0 ? "No free seats here." : `Only ${free} free seat${free === 1 ? "" : "s"} here.`
                   );
                   return prev;
                 }
-                const evicted = prev[evictIndex];
+                const evicted = prev[0];
                 setMoveError(
                   `Only ${free} free seat${free === 1 ? "" : "s"} here — swapped ${evicted} for ${kid}.`
                 );
-                return [...prev.slice(0, evictIndex), ...prev.slice(evictIndex + 1), kid];
+                return [...prev.slice(1), kid];
               }
               setMoveError(null);
               return [...prev, kid];
@@ -878,14 +874,6 @@ export function CarpoolDetail({
           </select>
         </div>
         <div className="form-field">
-          <span className="gate-field-label">Street address</span>
-          <input value={draftStreet} onChange={(e) => setDraftStreet(e.target.value)} />
-        </div>
-        <div className="form-field">
-          <span className="gate-field-label">Zip code</span>
-          <input value={draftZip} onChange={(e) => setDraftZip(e.target.value)} inputMode="numeric" />
-        </div>
-        <div className="form-field">
           <span className="gate-field-label">Drop-off time</span>
           <input
             type="time"
@@ -902,6 +890,14 @@ export function CarpoolDetail({
             onChange={(e) => setDraftPickUpTime(e.target.value)}
             onInvalid={(e) => e.preventDefault()}
           />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Street address</span>
+          <input value={draftStreet} onChange={(e) => setDraftStreet(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Zip code</span>
+          <input value={draftZip} onChange={(e) => setDraftZip(e.target.value)} inputMode="numeric" />
         </div>
         <KidPicker
           allKids={allKids}

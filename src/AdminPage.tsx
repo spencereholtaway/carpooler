@@ -667,7 +667,7 @@ export function AdminPage() {
                 <tr>
                   <th>Name</th>
                   <th>Kids</th>
-                  <th>Seats</th>
+                  <th>Capacity</th>
                   <th>Street</th>
                   <th>Zip</th>
                   <th>Member ID</th>
@@ -791,7 +791,7 @@ export function AdminPage() {
               />
             </label>
             <label>
-              Seats
+              Capacity (incl. own kids)
               <input
                 type="number"
                 value={userDraft.seats}
@@ -920,7 +920,7 @@ export function AdminPage() {
             />
           </label>
           <label>
-            Seats
+            Capacity (incl. own kids)
             <input
               type="number"
               value={newUser.seats}
