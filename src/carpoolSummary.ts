@@ -59,7 +59,6 @@ export function resolveKidDrivers(
 function legSentences(
   kidToDriver: Map<string, string>,
   leg: "dropOff" | "pickUp",
-  selfId: string,
   selfKids: string[],
   members: Member[],
   drivenBySelf: string[],
@@ -121,10 +120,8 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
 
   return [
     bothWaysKids.length > 0 ? `You're driving ${joinList(bothWaysKids)} both ways.` : "",
-    legSentences(dropOffDrivers, "dropOff", memberId, self.kids, carpool.members, dropOffSelf, bothWaysKids).join(
-      " "
-    ),
-    legSentences(pickUpDrivers, "pickUp", memberId, self.kids, carpool.members, pickUpSelf, bothWaysKids).join(" "),
+    legSentences(dropOffDrivers, "dropOff", self.kids, carpool.members, dropOffSelf, bothWaysKids).join(" "),
+    legSentences(pickUpDrivers, "pickUp", self.kids, carpool.members, pickUpSelf, bothWaysKids).join(" "),
   ]
     .filter(Boolean)
     .join("\n");
