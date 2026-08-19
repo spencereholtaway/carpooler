@@ -970,6 +970,13 @@ button {
   margin: 0;
 }
 
+.mini-form .subtext {
+  margin-top: -8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted-2);
+}
+
 .mini-form input {
   border-radius: 999px;
 }

@@ -225,6 +225,10 @@ export function ProfileEditor({
 
       <div className="mini-form">
         <h4>Free seats in your car</h4>
+        <p className="subtext">
+          How many extra kids can you carry? These seats will only be open if you sign up to
+          drive in a carpool you're a part of.
+        </p>
         <div className="seat-stepper">
           <button
             type="button"
