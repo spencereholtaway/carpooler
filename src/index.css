@@ -1457,12 +1457,16 @@ button {
   margin: 4px 0;
 }
 
-.schedule-summary-heading {
+.carpool-subline {
+  margin: -14px 0 0;
   text-align: left;
+  font-size: 13px;
 }
 
-.schedule-summary-heading .bliss-heading {
-  font-family: var(--sans);
+.bliss-heading.can-drive-heading {
+  margin-top: 20px;
+  margin-bottom: 0;
+  text-align: left;
   font-style: normal;
 }
 

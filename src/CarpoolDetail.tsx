@@ -539,6 +539,26 @@ export function CarpoolDetail({
             </button>
           )}
         </div>
+        <p className="carpool-subline muted">
+          {carpool.day ?? "No day set"}
+          {carpool.dropOff?.time && carpool.pickUp?.time
+            ? `, ${formatTime(carpool.dropOff.time)} - ${formatTime(carpool.pickUp.time)}`
+            : ""}
+          {carpool.destination?.street && (
+            <>
+              ,{" "}
+              <a
+                className="address-link"
+                href={mapsLink(carpool.destination.street, carpool.destination.zip)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {carpool.destination.street}
+                {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
+              </a>
+            </>
+          )}
+        </p>
         {self && youSummary && (
           <div className="ai-summary ai-summary-mobile-only">
             <span className="ai-summary-badge">
@@ -559,22 +579,7 @@ export function CarpoolDetail({
         )}
 
         <div className="schedule-summary">
-          <div className="schedule-summary-heading">
-            <p className="bliss-heading">{carpool.day ?? "No day set"}</p>
-            {carpool.destination?.street && (
-              <p className="muted">
-                <a
-                  className="address-link"
-                  href={mapsLink(carpool.destination.street, carpool.destination.zip)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {carpool.destination.street}
-                  {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
-                </a>
-              </p>
-            )}
-          </div>
+          <h3 className="bliss-heading can-drive-heading">Can you drive?</h3>
           <div className="schedule-legs">
             <div className="leg-toggle-stack">
               <LegToggleRow
