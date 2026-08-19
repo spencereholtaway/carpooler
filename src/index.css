@@ -1589,9 +1589,24 @@ button {
   margin-top: 27px;
 }
 
+/* Two copies of the AI summary exist in the markup — one under the carpool
+   title for the single-column mobile layout, one in the main panel for the
+   two-column desktop layout — and only one is shown at a time. */
+.ai-summary-desktop-only {
+  display: none;
+}
+
 @media (min-width: 900px) {
   .carpool-detail-main > .ai-summary:first-child {
     margin-top: calc(1.5em + 18px);
+  }
+
+  .ai-summary-mobile-only {
+    display: none;
+  }
+
+  .ai-summary-desktop-only {
+    display: flex;
   }
 }
 
