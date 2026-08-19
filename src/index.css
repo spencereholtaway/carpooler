@@ -641,6 +641,21 @@ button {
   border: 1px solid rgba(139, 123, 184, 0.35);
 }
 
+/* A destructive confirm action deliberately does NOT reuse the accent
+   gradient — that gradient reads as "the recommended choice" everywhere
+   else (Save, Move here), so a destructive action wearing it looks like
+   the default path instead of the one that needs a second thought. */
+.pill-button.danger {
+  background: none;
+  color: var(--danger);
+  box-shadow: none;
+  border: 1px solid rgba(194, 104, 95, 0.35);
+}
+
+.pill-button.danger:hover {
+  background: rgba(194, 104, 95, 0.08);
+}
+
 
 /* --- app shell --- */
 
@@ -1845,6 +1860,27 @@ button {
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Tinted with --danger, not the accent gradient used for "my kid" pills —
+   this kid isn't the driver's own, and it's about to be moved, so the color
+   itself signals that instead of relying on the surrounding sentence alone. */
+.confirm-kid-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(194, 104, 95, 0.12);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.confirm-off-kids {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  vertical-align: middle;
 }
 
 .driving-row-actions {

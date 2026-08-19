@@ -393,6 +393,14 @@ export function CarpoolDetail({
     null
   );
   const [applyingMovePrompt, setApplyingMovePrompt] = useState(false);
+  // Turning off a leg's driving toggle evicts anyone else's kid riding in
+  // that car (see syncCar server-side) — gate that behind an explicit
+  // confirmation instead of letting a toggle click silently bounce someone
+  // else's kid back to their own parent.
+  const [pendingOff, setPendingOff] = useState<{ leg: "dropOff" | "pickUp"; kids: string[] } | null>(
+    null
+  );
+  const [confirmingOff, setConfirmingOff] = useState(false);
 
   const self = carpool.members.find((m) => m.id === memberId);
   // With nobody else to coordinate with yet, "who's driving who" has only
@@ -525,6 +533,54 @@ export function CarpoolDetail({
 
   const dismissMovePrompt = () => setMovePrompt(null);
 
+  // A car with someone else's kid in it still shows that kid even after this
+  // toggle turns off (see syncCar) — check before flipping so we can confirm
+  // first instead of surprising the driver.
+  const othersKidsInCar = (leg: "dropOff" | "pickUp") => {
+    if (!self) return [];
+    const cars = (leg === "dropOff" ? carpool.dropOff?.cars : carpool.pickUp?.cars) ?? [];
+    const car = cars.find((c) => c.driverId === memberId);
+    return car ? car.kids.filter((k) => !self.kids.includes(k)) : [];
+  };
+
+  const requestToggleDropOff = () => {
+    if (!self) return;
+    if (self.canDriveDropOff) {
+      const othersKids = othersKidsInCar("dropOff");
+      if (othersKids.length > 0) {
+        setPendingOff({ leg: "dropOff", kids: othersKids });
+        return;
+      }
+    }
+    toggleDropOff();
+  };
+
+  const requestTogglePickUp = () => {
+    if (!self) return;
+    if (self.canDrivePickUp) {
+      const othersKids = othersKidsInCar("pickUp");
+      if (othersKids.length > 0) {
+        setPendingOff({ leg: "pickUp", kids: othersKids });
+        return;
+      }
+    }
+    togglePickUp();
+  };
+
+  const confirmToggleOff = async () => {
+    if (!pendingOff) return;
+    setConfirmingOff(true);
+    try {
+      if (pendingOff.leg === "dropOff") await toggleDropOff();
+      else await togglePickUp();
+    } finally {
+      setConfirmingOff(false);
+      setPendingOff(null);
+    }
+  };
+
+  const cancelPendingOff = () => setPendingOff(null);
+
   return (
     <div className="carpool-detail">
       <div className="carpool-detail-sidebar">
@@ -587,7 +643,7 @@ export function CarpoolDetail({
                 time={carpool.dropOff?.time ?? ""}
                 checked={self?.canDriveDropOff ?? false}
                 disabled={!self || togglingDropOff}
-                onToggle={toggleDropOff}
+                onToggle={requestToggleDropOff}
               />
               {movePrompt?.leg === "dropOff" && (
                 <AiMovePrompt
@@ -605,7 +661,7 @@ export function CarpoolDetail({
                 time={carpool.pickUp?.time ?? ""}
                 checked={self?.canDrivePickUp ?? false}
                 disabled={!self || togglingPickUp}
-                onToggle={togglePickUp}
+                onToggle={requestTogglePickUp}
               />
               {movePrompt?.leg === "pickUp" && (
                 <AiMovePrompt
@@ -750,6 +806,40 @@ export function CarpoolDetail({
           onChange={setDraftKids}
           label="Which of your kids is in this carpool?"
         />
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!pendingOff}
+        onClose={cancelPendingOff}
+        title="Stop driving this leg?"
+        footer={
+          <>
+            <button type="button" className="pill-button" onClick={cancelPendingOff} disabled={confirmingOff}>
+              No, keep driving
+            </button>
+            <button
+              type="button"
+              className="pill-button danger"
+              onClick={confirmToggleOff}
+              disabled={confirmingOff}
+            >
+              {confirmingOff ? "Moving..." : "Yes, move them"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          <span className="confirm-off-kids">
+            {(pendingOff?.kids ?? []).map((k) => (
+              <span className="confirm-kid-chip" key={k}>
+                {k}
+              </span>
+            ))}
+          </span>{" "}
+          {(pendingOff?.kids.length ?? 0) > 1 ? "ride" : "rides"} with you right now. Turning this off will
+          move {(pendingOff?.kids.length ?? 0) > 1 ? "them" : "them"} back to{" "}
+          {(pendingOff?.kids.length ?? 0) > 1 ? "their own parents'" : "their own parent's"} car.
+        </p>
       </BottomSheet>
     </div>
   );
