@@ -152,6 +152,12 @@ p {
   margin: 0;
 }
 
+.subtext {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted-2);
+}
+
 .muted {
   color: var(--text);
   font-size: 14px;
@@ -980,9 +986,6 @@ button {
 
 .mini-form .subtext {
   margin-top: -8px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--muted-2);
 }
 
 .mini-form input {
