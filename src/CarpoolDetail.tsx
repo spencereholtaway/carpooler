@@ -504,13 +504,22 @@ export function CarpoolDetail({
           )}
         </div>
         {self && youSummary && (
-          <span className="ai-summary-badge">
-            <span className="ai-summary-sparkle" aria-hidden="true">
-              ✨
+          <div className="ai-summary">
+            <span className="ai-summary-badge">
+              <span className="ai-summary-sparkle" aria-hidden="true">
+                ✨
+              </span>
+              <span className="ai-summary-name">blisspoolAI</span>
+              <span className="ai-summary-live" aria-hidden="true" />
             </span>
-            <span className="ai-summary-name">blisspoolAI</span>
-            <span className="ai-summary-live" aria-hidden="true" />
-          </span>
+            <p className="ai-summary-quote">
+              {typedSummary}
+              <span
+                className={`ai-summary-cursor ${typingDone ? "" : "typing"}`}
+                aria-hidden="true"
+              />
+            </p>
+          </div>
         )}
 
         <div className="schedule-summary">
@@ -596,19 +605,7 @@ export function CarpoolDetail({
           </div>
         ) : (
           <>
-            {self && youSummary ? (
-              <div className="ai-summary">
-                <p className="ai-summary-quote">
-                  {typedSummary}
-                  <span
-                    className={`ai-summary-cursor ${typingDone ? "" : "typing"}`}
-                    aria-hidden="true"
-                  />
-                </p>
-              </div>
-            ) : (
-              <h3 className="bliss-heading">Who's driving who?</h3>
-            )}
+            <h3 className="bliss-heading">Who's driving who?</h3>
             <DrivingLeg
               label="Drop-off"
               time={carpool.dropOff?.time ?? ""}
