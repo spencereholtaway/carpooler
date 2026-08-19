@@ -19,7 +19,9 @@ export function joinList(items: string[]): string {
 // coparents), only the member who joined this carpool first — i.e. appears
 // earliest in `members` — gets them by default. Everyone else starts at
 // "Nobody" until the kid is explicitly moved to them.
-export function computeKidDefaults(members: Member[]): Map<string, string> {
+export function computeKidDefaults<M extends { id: string; kids: string[] }>(
+  members: M[]
+): Map<string, string> {
   const defaults = new Map<string, string>();
   for (const m of members) {
     for (const k of m.kids) {
@@ -34,9 +36,9 @@ export function computeKidDefaults(members: Member[]): Map<string, string> {
 // parent owns them (kidDefaults) even though that parent has no car entry —
 // same "you're always good for your own kid" assumption the driving rows
 // display, so the summary has to agree with what those rows show.
-export function resolveKidDrivers(
+export function resolveKidDrivers<M extends { id: string; kids: string[] }>(
   cars: Car[],
-  members: Member[],
+  members: M[],
   kidDefaults: Map<string, string>
 ): Map<string, string> {
   const kidToDriver = new Map<string, string>();

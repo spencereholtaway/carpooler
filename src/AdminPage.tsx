@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { computeKidDefaults, resolveKidDrivers } from "./carpoolSummary";
 
 const KEY_STORAGE = "blisspool:admin-key";
 
@@ -340,8 +341,8 @@ function LegAssignmentsByParent({
   const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
     a.localeCompare(b)
   );
-  const assignedKids = new Set(cars.flatMap((c) => c.kids));
-  const unassignedKids = allKids.filter((k) => !assignedKids.has(k));
+  const kidDefaults = computeKidDefaults(carpool.members);
+  const kidToDriver = resolveKidDrivers(cars, carpool.members, kidDefaults);
 
   return (
     <div className="admin-panel-leg-assignments">
@@ -351,10 +352,14 @@ function LegAssignmentsByParent({
       ) : (
         <div className="admin-car-list">
           {drivers.map((d) => {
-            const kids = (cars.find((c) => c.driverId === d.id)?.kids ?? []).slice().sort((a, b) =>
-              a.localeCompare(b)
-            );
-            const addOptions = unassignedKids.map((k) => ({ id: k, name: k }));
+            const isExplicit = cars.some((c) => c.driverId === d.id);
+            const kids = allKids
+              .filter((k) => kidToDriver.get(k) === d.id)
+              .slice()
+              .sort((a, b) => a.localeCompare(b));
+            const addOptions = allKids
+              .filter((k) => kidToDriver.get(k) !== d.id)
+              .map((k) => ({ id: k, name: k }));
             return (
               <div className="admin-car-card" key={d.id}>
                 <div className="admin-car-card-header">{d.name}</div>
@@ -362,19 +367,23 @@ function LegAssignmentsByParent({
                   {kids.length === 0 ? (
                     <span className="admin-muted">Nobody</span>
                   ) : (
-                    kids.map((k) => (
-                      <span className="admin-member-chip" key={k}>
-                        {k}{" "}
-                        <button
-                          type="button"
-                          className="admin-chip-remove"
-                          title="Unassign"
-                          onClick={() => onMoveKid(k, null)}
-                        >
-                          &times;
-                        </button>
-                      </span>
-                    ))
+                    kids.map((k) => {
+                      const isDefault = !isExplicit;
+                      return (
+                        <span className="admin-member-chip" key={k}>
+                          {k}
+                          {isDefault && <span className="admin-muted"> (default)</span>}{" "}
+                          <button
+                            type="button"
+                            className="admin-chip-remove"
+                            title="Unassign"
+                            onClick={() => onMoveKid(k, null)}
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
                 {addOptions.length > 0 && (
