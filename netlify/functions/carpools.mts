@@ -76,9 +76,7 @@ export default async (req: Request) => {
 
     const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
     const carpools = (
-      await Promise.all(
-        codes.map((code) => store.get(`code:${code}`, { type: "json", consistency: "eventual" }))
-      )
+      await Promise.all(codes.map((code) => store.get(`code:${code}`, { type: "json" })))
     ).filter(Boolean) as Carpool[];
 
     return new Response(JSON.stringify(carpools), {
