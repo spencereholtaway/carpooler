@@ -2155,17 +2155,16 @@ button {
   text-decoration: underline;
 }
 
-.admin-add-row {
+.admin-list-toolbar {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
   align-items: center;
   margin-bottom: 12px;
 }
 
-.admin-add-row input {
+.admin-search-input {
   flex: 1;
-  min-width: 100px;
+  max-width: 320px;
 }
 
 .admin-member-chip {
@@ -2345,14 +2344,42 @@ button {
 }
 
 .admin-panel-members,
-.admin-panel-household {
+.admin-panel-household,
+.admin-panel-carpools {
   border-top: 1px solid var(--admin-border-soft);
   padding-top: 14px;
 }
 
 .admin-panel-members h4,
-.admin-panel-household h4 {
+.admin-panel-household h4,
+.admin-panel-carpools h4 {
   margin: 0 0 8px;
+}
+
+.admin-user-carpool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-user-carpool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--admin-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-user-carpool-row:hover {
+  background: var(--admin-surface-2);
 }
 
 .admin-checkbox-label {

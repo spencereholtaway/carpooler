@@ -58,8 +58,52 @@ function rankNameMatch(name: string, query: string): number | null {
   if (words.length === 0) return null;
   if (words[0].startsWith(q)) return 0;
   if (words.slice(1).some((w) => w.startsWith(q))) return 1;
-  if (name.toLowerCase().includes(q)) return 2;
   return null;
+}
+
+// Filters + orders a list by the same word-match ranking NameAutosuggest
+// uses, so table search behaves consistently with the lookup dropdowns.
+function filterByName<T>(items: T[], query: string, getName: (item: T) => string): T[] {
+  const q = query.trim();
+  if (!q) return items;
+  return items
+    .map((item) => ({ item, rank: rankNameMatch(getName(item), q) }))
+    .filter((r): r is { item: T; rank: number } => r.rank !== null)
+    .sort((a, b) => a.rank - b.rank || getName(a.item).localeCompare(getName(b.item)))
+    .map((r) => r.item);
+}
+
+// Mirrors rankNameMatch: only a match at the start of a word (first name,
+// last name, etc.) counts — a query that merely appears mid-word doesn't
+// match at all, so it shouldn't get highlighted either.
+function findWordStartMatches(name: string, query: string): number[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const lower = name.toLowerCase();
+  const indices: number[] = [];
+  let from = 0;
+  while (from <= lower.length - q.length) {
+    const found = lower.indexOf(q, from);
+    if (found === -1) break;
+    if (found === 0 || /\s/.test(lower[found - 1])) indices.push(found);
+    from = found + 1;
+  }
+  return indices;
+}
+
+function HighlightedName({ name, query }: { name: string; query: string }) {
+  const q = query.trim();
+  const matches = findWordStartMatches(name, q);
+  if (matches.length === 0) return <>{name}</>;
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  matches.forEach((idx, i) => {
+    parts.push(name.slice(cursor, idx));
+    parts.push(<strong key={i}>{name.slice(idx, idx + q.length)}</strong>);
+    cursor = idx + q.length;
+  });
+  parts.push(name.slice(cursor));
+  return <>{parts}</>;
 }
 
 function NameAutosuggest({
@@ -169,7 +213,7 @@ function NameAutosuggest({
                   commit(o.id, o.name);
                 }}
               >
-                {o.name}
+                <HighlightedName name={o.name} query={query} />
               </li>
             ))
           )}
@@ -246,25 +290,32 @@ function LegAssignments({
             </tr>
           </thead>
           <tbody>
-            {allKids.map((kid) => (
-              <tr key={kid}>
-                <td>
-                  <div className="admin-kid-cell">
-                    <strong>{kid}</strong>
-                    <span className="admin-kid-parent">{parentOf(kid)}</span>
-                  </div>
-                </td>
-                <td>
-                  <NameAutosuggest
-                    options={drivers}
-                    value={driverFor(kid)}
-                    onChange={(id) => onMoveKid(kid, id || null)}
-                    placeholder="Unassigned"
-                    allowClear
-                  />
-                </td>
-              </tr>
-            ))}
+            {allKids.map((kid) => {
+              // A kid with no explicit car still has a default ride: their
+              // own parent, if that parent is driving this leg — the picker
+              // should say so instead of showing a bare "Unassigned".
+              const defaultLabel = `${parentOf(kid)} (default)`;
+              return (
+                <tr key={kid}>
+                  <td>
+                    <div className="admin-kid-cell">
+                      <strong>{kid}</strong>
+                      <span className="admin-kid-parent">{parentOf(kid)}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <NameAutosuggest
+                      options={drivers}
+                      value={driverFor(kid)}
+                      onChange={(id) => onMoveKid(kid, id || null)}
+                      placeholder={defaultLabel}
+                      allowClear
+                      clearLabel={defaultLabel}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -405,8 +456,12 @@ export function AdminPage() {
 
   const [newUser, setNewUser] = useState({ name: "", seats: "1", kids: "", street: "", zip: "" });
   const [addingUser, setAddingUser] = useState(false);
-  const createUser = async (e: FormEvent) => {
-    e.preventDefault();
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const openAddUser = () => {
+    setNewUser({ name: "", seats: "1", kids: "", street: "", zip: "" });
+    setAddUserOpen(true);
+  };
+  const createUser = async () => {
     if (!newUser.name.trim()) return;
     setAddingUser(true);
     try {
@@ -417,11 +472,14 @@ export function AdminPage() {
         street: newUser.street,
         zip: newUser.zip,
       });
-      setNewUser({ name: "", seats: "1", kids: "", street: "", zip: "" });
+      setAddUserOpen(false);
     } finally {
       setAddingUser(false);
     }
   };
+
+  const [userSearch, setUserSearch] = useState("");
+  const [carpoolSearch, setCarpoolSearch] = useState("");
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [userDraft, setUserDraft] = useState<AdminUser | null>(null);
@@ -540,6 +598,12 @@ export function AdminPage() {
   // immediately, so the panel needs the freshly reloaded user, not the
   // snapshot captured when it opened.
   const liveEditingUser = editingUser ? users.find((u) => u.memberId === editingUser) : null;
+  const userCarpools = liveEditingUser
+    ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
+    : [];
+
+  const filteredUsers = filterByName(users, userSearch, (u) => u.name);
+  const filteredCarpools = filterByName(carpools, carpoolSearch, (c) => c.name);
 
   if (!key) {
     return (
@@ -584,38 +648,20 @@ export function AdminPage() {
         {error && <p className="admin-error">{error}</p>}
 
         {!loading && tab === "users" && (
-          <div className="admin-table-wrap">
-            <form className="admin-add-row" onSubmit={createUser}>
+          <>
+            <div className="admin-list-toolbar">
               <input
-                placeholder="Name"
-                value={newUser.name}
-                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                type="search"
+                className="admin-search-input"
+                placeholder="Search users..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
               />
-              <input
-                placeholder="Kids (comma separated)"
-                value={newUser.kids}
-                onChange={(e) => setNewUser({ ...newUser, kids: e.target.value })}
-              />
-              <input
-                type="number"
-                placeholder="Seats"
-                value={newUser.seats}
-                onChange={(e) => setNewUser({ ...newUser, seats: e.target.value })}
-              />
-              <input
-                placeholder="Street"
-                value={newUser.street}
-                onChange={(e) => setNewUser({ ...newUser, street: e.target.value })}
-              />
-              <input
-                placeholder="Zip"
-                value={newUser.zip}
-                onChange={(e) => setNewUser({ ...newUser, zip: e.target.value })}
-              />
-              <button type="submit" disabled={addingUser}>
-                {addingUser ? "Adding..." : "Add user"}
+              <button type="button" onClick={openAddUser}>
+                + Add user
               </button>
-            </form>
+            </div>
+            <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -629,9 +675,9 @@ export function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
+                {filteredUsers.map((u) => (
                   <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
-                    <td>{u.name}</td>
+                    <td><HighlightedName name={u.name} query={userSearch} /></td>
                     <td>{u.kids?.join(", ") || "—"}</td>
                     <td>{u.seats}</td>
                     <td>{u.street || "—"}</td>
@@ -644,11 +690,22 @@ export function AdminPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         {!loading && tab === "carpools" && (
-          <div className="admin-table-wrap">
+          <>
+            <div className="admin-list-toolbar">
+              <input
+                type="search"
+                className="admin-search-input"
+                placeholder="Search carpools..."
+                value={carpoolSearch}
+                onChange={(e) => setCarpoolSearch(e.target.value)}
+              />
+            </div>
+            <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -663,9 +720,9 @@ export function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {carpools.map((c) => (
+                {filteredCarpools.map((c) => (
                   <tr key={c.code} className="admin-row-clickable" onClick={() => startEditCarpool(c)}>
-                    <td>{c.name}</td>
+                    <td><HighlightedName name={c.name} query={carpoolSearch} /></td>
                     <td>{c.day ?? "—"}</td>
                     <td>
                       {c.destination?.street ? `${c.destination.street}, ${c.destination.zip}` : "—"}
@@ -693,7 +750,8 @@ export function AdminPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
         </div>
       </main>
@@ -757,6 +815,32 @@ export function AdminPage() {
             <p className="admin-mono">{userDraft.memberId}</p>
 
             {liveEditingUser && (
+              <div className="admin-panel-carpools">
+                <h4>Carpools</h4>
+                {userCarpools.length === 0 ? (
+                  <p className="admin-muted">Not in any carpools.</p>
+                ) : (
+                  <div className="admin-user-carpool-list">
+                    {userCarpools.map((c) => (
+                      <button
+                        type="button"
+                        key={c.code}
+                        className="admin-user-carpool-row"
+                        onClick={() => {
+                          setEditingUser(null);
+                          startEditCarpool(c);
+                        }}
+                      >
+                        <span>{c.name}</span>
+                        <span className="admin-muted">{c.day || "No day set"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {liveEditingUser && (
               <div className="admin-panel-household">
                 <h4>Co-parent household</h4>
                 {liveEditingUser.coParentId ? (
@@ -804,6 +888,57 @@ export function AdminPage() {
             )}
           </div>
         )}
+      </SidePanel>
+
+      <SidePanel
+        open={addUserOpen}
+        onClose={() => setAddUserOpen(false)}
+        title="Add user"
+        footer={
+          <>
+            <button onClick={createUser} disabled={addingUser || !newUser.name.trim()}>
+              {addingUser ? "Adding..." : "Create"}
+            </button>{" "}
+            <button onClick={() => setAddUserOpen(false)}>Cancel</button>
+          </>
+        }
+      >
+        <div className="admin-panel-form">
+          <label>
+            Name
+            <input
+              value={newUser.name}
+              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+              autoFocus
+            />
+          </label>
+          <label>
+            Kids (comma separated)
+            <input
+              value={newUser.kids}
+              onChange={(e) => setNewUser({ ...newUser, kids: e.target.value })}
+            />
+          </label>
+          <label>
+            Seats
+            <input
+              type="number"
+              value={newUser.seats}
+              onChange={(e) => setNewUser({ ...newUser, seats: e.target.value })}
+            />
+          </label>
+          <label>
+            Street
+            <input
+              value={newUser.street}
+              onChange={(e) => setNewUser({ ...newUser, street: e.target.value })}
+            />
+          </label>
+          <label>
+            Zip
+            <input value={newUser.zip} onChange={(e) => setNewUser({ ...newUser, zip: e.target.value })} />
+          </label>
+        </div>
       </SidePanel>
 
       <SidePanel
