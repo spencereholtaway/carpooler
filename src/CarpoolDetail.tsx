@@ -141,8 +141,13 @@ function DrivingLeg({
   const [closingRow, setClosingRow] = useState<string | null>(null);
   const [selectedKids, setSelectedKids] = useState<string[]>([]);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const coParentMember = coParentId ? members.find((m) => m.id === coParentId) : undefined;
+  const mergeHousehold = householdCombined && !!coParentMember;
   const selfKidsList = members.find((m) => m.id === memberId)?.kids ?? [];
-  const myKids = new Set(selfKidsList);
+  // Once a household drives as one unit, both parents' kids read as "ours" —
+  // no more graying out the co-parent's kid as if it were someone else's.
+  const householdKidsList = mergeHousehold ? [...selfKidsList, ...coParentMember.kids] : selfKidsList;
+  const myKids = new Set(householdKidsList);
 
   // Not driving a leg doesn't mean your kid has no ride — it defaults to
   // riding with whichever parent owns it by default, unless someone has
@@ -166,13 +171,47 @@ function DrivingLeg({
     // gates offering up free seats to other members' kids.
     const movableKids = selfKidsList.filter((k) => !kids.includes(k));
     const canMoveHere = movableKids.length > 0 && (isSelf || isCoParent || (eligible && free > 0));
-    return { m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids };
+    return {
+      m,
+      kids,
+      eligible,
+      free,
+      isSelf,
+      isCoParent,
+      canMoveHere,
+      movableKids,
+      displayName: isSelf ? "You" : m.name,
+    };
   });
+
+  // A combined household drives as a single unit — fold the co-parent's row
+  // into "You" instead of listing two cards for one household.
+  let mergedRowData = rowData;
+  if (mergeHousehold) {
+    const selfEntry = rowData.find((r) => r.isSelf);
+    const coEntry = rowData.find((r) => r.m.id === coParentId);
+    if (selfEntry && coEntry) {
+      const mergedKids = Array.from(new Set([...selfEntry.kids, ...coEntry.kids]));
+      const mergedEligible = selfEntry.eligible || coEntry.eligible;
+      const mergedFree = (selfEntry.eligible ? selfEntry.free : 0) + (coEntry.eligible ? coEntry.free : 0);
+      const movableKids = Array.from(new Set([...selfEntry.movableKids, ...coEntry.movableKids]));
+      const merged = {
+        ...selfEntry,
+        kids: mergedKids,
+        eligible: mergedEligible,
+        free: mergedFree,
+        movableKids,
+        canMoveHere: movableKids.length > 0,
+        displayName: `You & ${coEntry.m.name}`,
+      };
+      mergedRowData = [merged, ...rowData.filter((r) => !r.isSelf && r.m.id !== coParentId)];
+    }
+  }
 
   // You first, then your co-parent, then cars with free seats, then everyone
   // else — alphabetical by name within each tier.
-  const rows = [...rowData].sort((a, b) => {
-    const rank = (r: (typeof rowData)[number]) =>
+  const rows = [...mergedRowData].sort((a, b) => {
+    const rank = (r: (typeof mergedRowData)[number]) =>
       r.isSelf ? 0 : r.m.id === coParentId ? 1 : r.eligible && r.free > 0 ? 2 : 3;
     const rankDiff = rank(a) - rank(b);
     return rankDiff !== 0 ? rankDiff : a.m.name.localeCompare(b.m.name);
@@ -192,7 +231,7 @@ function DrivingLeg({
         <span className="driving-leg-time muted">{formatTime(time)}</span>
       </div>
       <div className="driving-row-list">
-        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids }) => {
+        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids, displayName }) => {
           const expanded = canMoveHere && expandedRow === m.id;
           const closing = canMoveHere && closingRow === m.id;
           const multiPick = movableKids.length > 1;
@@ -251,10 +290,7 @@ function DrivingLeg({
             >
               <div className="driving-row-top">
                 <div className="driving-row-main">
-                  <strong>{isSelf ? "You" : m.name}</strong>
-                  {!isSelf && householdCombined && coParentId === m.id && (
-                    <span className="muted"> · same household</span>
-                  )}
+                  <strong>{displayName}</strong>
                   <div className="driving-row-kids">
                     {kids.length === 0 && <span className="muted">Nobody</span>}
                     {kids
