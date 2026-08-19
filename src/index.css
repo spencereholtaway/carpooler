@@ -718,12 +718,15 @@ button {
   max-width: 640px;
   margin: 0 auto;
   /* Topper is fixed/out of flow at all sizes, so top padding must match its
-     rendered height or content starts underneath it. */
-  padding: var(--topper-h) 20px 64px;
+     rendered height or content starts underneath it. Left/right padding is
+     0 here on mobile since #root already carries 16px of its own. */
+  padding: var(--topper-h) 0 64px;
 }
 
 @media (min-width: 900px) {
   .app-shell-main {
+    padding-left: 20px;
+    padding-right: 20px;
     padding-bottom: 0;
   }
 
