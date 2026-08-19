@@ -86,12 +86,23 @@ function App() {
     );
   }
 
+  const wide = selectedCarpool && !editingProfile;
+
   return (
     <div className="app-shell">
       <AmbientOrbs />
-      <main className="app-shell-main">
-        <div className="app-shell-topper">
-          <span className="app-shell-title">blisspool</span>
+      <div className="app-shell-topper">
+        <div className="app-shell-topper-inner app-shell-topper-inner-wide">
+          <button
+            type="button"
+            className="app-shell-title"
+            onClick={() => {
+              setSelectedCarpool(null);
+              setEditingProfile(false);
+            }}
+          >
+            blisspool
+          </button>
           <div className="app-shell-user">
             <span>
               Hi,{" "}
@@ -110,6 +121,8 @@ function App() {
             </button>
           </div>
         </div>
+      </div>
+      <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
         {editingProfile ? (
           <ProfileEditor
             memberId={memberId}

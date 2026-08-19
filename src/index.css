@@ -37,6 +37,10 @@
   --admin-panel-backdrop: rgba(15, 15, 20, 0.35);
   --admin-panel-shadow: rgba(0, 0, 0, 0.15);
 
+  /* Rendered height of the fixed .app-shell-topper — single source of
+     truth so nothing has to re-derive or guess it. */
+  --topper-h: 84px;
+
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --serif: "Fraunces", Georgia, serif;
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -230,6 +234,12 @@ button {
   max-width: none;
   padding: 0;
   border-inline: none;
+}
+
+@media (min-width: 900px) {
+  #root:has(.app-shell-main-wide) {
+    max-width: 1200px;
+  }
 }
 
 .hero-page {
@@ -635,21 +645,41 @@ button {
 
 .app-shell {
   position: relative;
-  min-height: 100svh;
+  /* #root carries its own 48px bottom padding outside this element, so
+     subtract it here or the page would always be taller than the viewport. */
+  min-height: calc(100svh - 48px);
   background: var(--bg);
 }
 
 .app-shell-topper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 20px 20px 32px;
+  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 55%, transparent 100%);
+  animation: float-in 0.7s var(--ease-smooth) both;
+}
+
+.app-shell-topper-inner {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 40px;
-  animation: float-in 0.7s var(--ease-smooth) both;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.app-shell-topper-inner-wide {
+  max-width: 1120px;
 }
 
 .app-shell-title {
+  background: none;
+  border: none;
+  padding: 0;
   font-family: var(--serif);
   font-style: italic;
   font-size: 24px;
@@ -686,7 +716,19 @@ button {
   position: relative;
   max-width: 640px;
   margin: 0 auto;
-  padding: 48px 20px 64px;
+  /* Topper is fixed/out of flow at all sizes, so top padding must match its
+     rendered height or content starts underneath it. */
+  padding: var(--topper-h) 20px 64px;
+}
+
+@media (min-width: 900px) {
+  .app-shell-main {
+    padding-bottom: 0;
+  }
+
+  .app-shell-main-wide {
+    max-width: 1200px;
+  }
 }
 
 /* --- carpools list --- */
@@ -895,6 +937,80 @@ button {
   text-align: center;
 }
 
+/* On mobile these wrappers are inert — their children stay direct flex
+   items of .carpool-detail so the single-column layout above is unaffected. */
+.carpool-detail-sidebar,
+.carpool-detail-main {
+  display: contents;
+}
+
+@media (min-width: 900px) {
+  .carpool-detail {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 800px);
+    /* Both columns stretch to fill the row (see height below) instead of
+       sizing to their own content, so each can scroll independently. */
+    align-items: stretch;
+    gap: 18px 40px;
+    text-align: left;
+    /* Anchored straight to the viewport's real edges instead of computing a
+       height from svh — top matches the fixed header (--topper-h), bottom
+       sits flush with the window. The browser derives the height from those
+       two anchors, so there's no offset to get wrong. */
+    position: fixed;
+    top: var(--topper-h);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+
+  .carpool-detail-main {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    /* Grid items default to min-height: auto, which lets their content's
+       intrinsic size override the 100% height below and grow the whole grid
+       past the viewport instead of scrolling internally. Pin it to 0. */
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    /* scrollbar-gutter reserves the scrollbar's own space, so content never
+       needs manual padding to avoid it. */
+    scrollbar-gutter: stable;
+    padding-bottom: 32px;
+  }
+
+  .carpool-detail-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .carpool-name-row,
+  .schedule-summary-heading {
+    text-align: left;
+  }
+
+  .invite-box {
+    align-items: flex-start;
+    text-align: left;
+    /* Pins to the bottom of the sidebar when there's slack; if the sidebar's
+       own content is tall enough to need its scrollbar, this just collapses
+       to 0 and the box scrolls with everything else — never forced off. */
+    margin-top: auto;
+  }
+
+}
+
 .carpool-name-row {
   display: flex;
   align-items: center;
@@ -988,6 +1104,36 @@ button {
   width: 100%;
 }
 
+@media (min-width: 900px) {
+  .sheet-backdrop {
+    align-items: center;
+  }
+
+  .bottom-sheet {
+    max-width: 480px;
+    max-height: 80vh;
+    border-radius: 24px;
+    box-shadow: 0 24px 60px rgba(139, 123, 184, 0.28);
+    animation: modal-in 0.22s var(--ease-smooth) both;
+  }
+
+  .bottom-sheet-footer {
+    padding: 14px 20px;
+    border-radius: 0 0 24px 24px;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .back-link {
   align-self: flex-start;
   text-align: left;
@@ -1005,11 +1151,38 @@ button {
   gap: 10px;
   padding: 32px;
   border-radius: 24px;
+  /* On mobile, .carpool-detail-sidebar is `display: contents`, so this box
+     becomes a direct flex item of .carpool-detail alongside the "who's
+     driving" content that comes after it in the sidebar/main split — push
+     it back to the end so mobile keeps its original bottom placement. */
+  order: 10;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   animation: breathe-invite 6s ease-in-out infinite;
+}
+
+@media (min-width: 900px) {
+  .invite-box {
+    flex: none;
+    padding: 18px 20px;
+    gap: 6px;
+    border-radius: 16px;
+  }
+
+  .invite-box .invite-code {
+    font-size: 24px;
+  }
+
+  .invite-box .linked-coparent-name {
+    font-size: 18px;
+  }
+
+  .invite-box .pill-button {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
 }
 
 @keyframes breathe-invite {
@@ -1136,8 +1309,15 @@ button {
   color: var(--text-h);
 }
 
-.carpool-detail > h3.bliss-heading {
+.carpool-detail-main > h3.bliss-heading {
   margin-top: 27px;
+}
+
+@media (min-width: 900px) {
+  .carpool-detail-main > h3.bliss-heading {
+    /* Lines up with the sidebar's title, which sits below the back-link row. */
+    margin-top: calc(1.5em + 18px);
+  }
 }
 
 .schedule-summary p {

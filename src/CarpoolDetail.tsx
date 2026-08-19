@@ -358,150 +358,154 @@ export function CarpoolDetail({
 
   return (
     <div className="carpool-detail">
-      <button className="back-link" onClick={onBack}>
-        &larr; All carpools
-      </button>
-      <div className="carpool-name-row">
-        <h2>{carpool.name}</h2>
-        {self && (
-          <button type="button" className="text-link" onClick={openKidsEditor}>
-            edit
-          </button>
-        )}
-      </div>
-      {self && allKids.length > 0 && (
-        <p className="muted carpool-kids-line">
-          {(self.kids ?? []).length > 0 ? self.kids.join(", ") : "No kids assigned yet"}
-        </p>
-      )}
-
-      <div className="schedule-summary">
-        <div className="schedule-summary-heading">
-          <p className="bliss-heading">{carpool.day ?? "No day set"}</p>
-          {carpool.destination?.street && (
-            <p className="muted">
-              <a
-                className="address-link"
-                href={mapsLink(carpool.destination.street, carpool.destination.zip)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {carpool.destination.street}
-                {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
-              </a>
-            </p>
+      <div className="carpool-detail-sidebar">
+        <button className="back-link" onClick={onBack}>
+          &larr; All carpools
+        </button>
+        <div className="carpool-name-row">
+          <h2>{carpool.name}</h2>
+          {self && (
+            <button type="button" className="text-link" onClick={openKidsEditor}>
+              edit
+            </button>
           )}
         </div>
-        <div className="schedule-legs">
-          <LegToggleRow
-            label="Drop-off"
-            time={carpool.dropOff?.time ?? ""}
-            checked={self?.canDriveDropOff ?? false}
-            disabled={!self || togglingDropOff}
-            onToggle={toggleDropOff}
-          />
-          <LegToggleRow
-            label="Pick-up"
-            time={carpool.pickUp?.time ?? ""}
-            checked={self?.canDrivePickUp ?? false}
-            disabled={!self || togglingPickUp}
-            onToggle={togglePickUp}
-          />
-        </div>
-      </div>
+        {self && allKids.length > 0 && (
+          <p className="muted carpool-kids-line">
+            {(self.kids ?? []).length > 0 ? self.kids.join(", ") : "No kids assigned yet"}
+          </p>
+        )}
 
-      <h3 className="bliss-heading">Who's driving who?</h3>
-      {self && self.kids.length > 1 && (
-        <div className="move-kid-control">
-          <div className="move-kid-trigger">
-            <button
-              type="button"
-              className="pill-button small secondary"
-              onClick={() => {
-                setDialogKid(movingKid);
-                setShowMoveDialog((v) => !v);
-              }}
-            >
-              {movingKid ? `Moving ${movingKid}` : "Move a kid"}
-            </button>
-            {movingKid && (
-              <button
-                type="button"
-                className="text-link"
-                onClick={() => {
-                  setMovingKid(null);
-                  setShowMoveDialog(false);
-                }}
-              >
-                cancel
-              </button>
+        <div className="schedule-summary">
+          <div className="schedule-summary-heading">
+            <p className="bliss-heading">{carpool.day ?? "No day set"}</p>
+            {carpool.destination?.street && (
+              <p className="muted">
+                <a
+                  className="address-link"
+                  href={mapsLink(carpool.destination.street, carpool.destination.zip)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {carpool.destination.street}
+                  {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
+                </a>
+              </p>
             )}
           </div>
-          {showMoveDialog && (
-            <div className="move-kid-dialog pop-in">
-              <span className="gate-field-label">Which kid?</span>
-              <div className="kid-tags">
-                {self.kids.map((kid) => (
-                  <button
-                    type="button"
-                    key={kid}
-                    className={`kid-pick ${dialogKid === kid ? "active" : ""}`}
-                    onClick={() => setDialogKid(dialogKid === kid ? null : kid)}
-                  >
-                    {kid}
-                  </button>
-                ))}
-              </div>
+          <div className="schedule-legs">
+            <LegToggleRow
+              label="Drop-off"
+              time={carpool.dropOff?.time ?? ""}
+              checked={self?.canDriveDropOff ?? false}
+              disabled={!self || togglingDropOff}
+              onToggle={toggleDropOff}
+            />
+            <LegToggleRow
+              label="Pick-up"
+              time={carpool.pickUp?.time ?? ""}
+              checked={self?.canDrivePickUp ?? false}
+              disabled={!self || togglingPickUp}
+              onToggle={togglePickUp}
+            />
+          </div>
+        </div>
+
+        <div className="invite-box">
+          <span className="invite-label">Invite code</span>
+          <span className="invite-code">{carpool.code}</span>
+          <button type="button" className="pill-button secondary" onClick={copyLink}>
+            {copied ? "Copied!" : "Copy invite link"}
+          </button>
+        </div>
+      </div>
+
+      <div className="carpool-detail-main">
+        <h3 className="bliss-heading">Who's driving who?</h3>
+        {self && self.kids.length > 1 && (
+          <div className="move-kid-control">
+            <div className="move-kid-trigger">
               <button
                 type="button"
-                className="pill-button small"
-                disabled={!dialogKid}
+                className="pill-button small secondary"
                 onClick={() => {
-                  setMovingKid(dialogKid);
-                  setShowMoveDialog(false);
+                  setDialogKid(movingKid);
+                  setShowMoveDialog((v) => !v);
                 }}
               >
-                Move
+                {movingKid ? `Moving ${movingKid}` : "Move a kid"}
               </button>
+              {movingKid && (
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => {
+                    setMovingKid(null);
+                    setShowMoveDialog(false);
+                  }}
+                >
+                  cancel
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      )}
-      <DrivingLeg
-        key={`dropOff-${effectiveMovingKid ?? "none"}`}
-        label="Drop-off"
-        time={carpool.dropOff?.time ?? ""}
-        cars={carpool.dropOff?.cars ?? []}
-        members={carpool.members}
-        memberId={memberId}
-        eligibleFor={(m) => m.canDriveDropOff}
-        movingKid={effectiveMovingKid}
-        onCarsChange={(cars) => updateLegCars("dropOff", cars)}
-        kidDefaults={kidDefaults}
-        coParentId={household?.coParentId ?? null}
-        householdCombined={household?.combined ?? false}
-      />
-      <DrivingLeg
-        key={`pickUp-${effectiveMovingKid ?? "none"}`}
-        label="Pick-up"
-        time={carpool.pickUp?.time ?? ""}
-        cars={carpool.pickUp?.cars ?? []}
-        members={carpool.members}
-        memberId={memberId}
-        eligibleFor={(m) => m.canDrivePickUp}
-        movingKid={effectiveMovingKid}
-        onCarsChange={(cars) => updateLegCars("pickUp", cars)}
-        kidDefaults={kidDefaults}
-        coParentId={household?.coParentId ?? null}
-        householdCombined={household?.combined ?? false}
-      />
-
-      <div className="invite-box">
-        <span className="invite-label">Invite code</span>
-        <span className="invite-code">{carpool.code}</span>
-        <button type="button" className="pill-button secondary" onClick={copyLink}>
-          {copied ? "Copied!" : "Copy invite link"}
-        </button>
+            {showMoveDialog && (
+              <div className="move-kid-dialog pop-in">
+                <span className="gate-field-label">Which kid?</span>
+                <div className="kid-tags">
+                  {self.kids.map((kid) => (
+                    <button
+                      type="button"
+                      key={kid}
+                      className={`kid-pick ${dialogKid === kid ? "active" : ""}`}
+                      onClick={() => setDialogKid(dialogKid === kid ? null : kid)}
+                    >
+                      {kid}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="pill-button small"
+                  disabled={!dialogKid}
+                  onClick={() => {
+                    setMovingKid(dialogKid);
+                    setShowMoveDialog(false);
+                  }}
+                >
+                  Move
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        <DrivingLeg
+          key={`dropOff-${effectiveMovingKid ?? "none"}`}
+          label="Drop-off"
+          time={carpool.dropOff?.time ?? ""}
+          cars={carpool.dropOff?.cars ?? []}
+          members={carpool.members}
+          memberId={memberId}
+          eligibleFor={(m) => m.canDriveDropOff}
+          movingKid={effectiveMovingKid}
+          onCarsChange={(cars) => updateLegCars("dropOff", cars)}
+          kidDefaults={kidDefaults}
+          coParentId={household?.coParentId ?? null}
+          householdCombined={household?.combined ?? false}
+        />
+        <DrivingLeg
+          key={`pickUp-${effectiveMovingKid ?? "none"}`}
+          label="Pick-up"
+          time={carpool.pickUp?.time ?? ""}
+          cars={carpool.pickUp?.cars ?? []}
+          members={carpool.members}
+          memberId={memberId}
+          eligibleFor={(m) => m.canDrivePickUp}
+          movingKid={effectiveMovingKid}
+          onCarsChange={(cars) => updateLegCars("pickUp", cars)}
+          kidDefaults={kidDefaults}
+          coParentId={household?.coParentId ?? null}
+          householdCombined={household?.combined ?? false}
+        />
       </div>
 
       <BottomSheet
