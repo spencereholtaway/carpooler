@@ -1,25 +1,55 @@
 import { useEffect, useRef, useState } from "react";
 import { createCarpool, joinCarpool, listCarpools } from "./api";
 import { BottomSheet } from "./BottomSheet";
+import { summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { DAYS_OF_WEEK, type Carpool, type DayOfWeek } from "./types";
 import type { LocalProfile } from "./useProfile";
+import { useTypewriter } from "./useTypewriter";
 
-type Group = { key: string; label: string; kid: string; carpools: Carpool[] };
+type DayGroup = { day: DayOfWeek | null; carpools: Carpool[] };
 
-function selfKidsIn(carpool: Carpool, memberId: string): string[] {
-  return carpool.members.find((m) => m.id === memberId)?.kids ?? [];
+function TodayCarpoolRow({
+  carpool,
+  summary,
+  onOpen,
+}: {
+  carpool: Carpool;
+  summary: string;
+  onOpen: () => void;
+}) {
+  const { display, done } = useTypewriter(summary);
+  const lines = display.split("\n");
+  return (
+    <button className="today-carpool" onClick={onOpen}>
+      <span className="today-carpool-name">{carpool.name}</span>
+      <div className="today-carpool-summary">
+        {lines.map((line, i) => (
+          <p key={i}>
+            {line}
+            {i === lines.length - 1 && (
+              <span className={`ai-summary-cursor ${done ? "" : "typing"}`} aria-hidden="true" />
+            )}
+          </p>
+        ))}
+      </div>
+    </button>
+  );
 }
 
-// One section per kid on the profile, always present (even with zero
-// carpools yet) — a carpool with multiple kids shows up under each of them.
-function buildSections(carpools: Carpool[], memberId: string, allKids: string[]): Group[] {
-  return allKids.map((kid) => ({
-    key: kid,
-    label: `${kid}'s Carpools`,
-    kid,
-    carpools: carpools.filter((c) => selfKidsIn(c, memberId).includes(kid)),
-  }));
+// Buckets by day and orders those buckets chronologically starting Monday —
+// carpools with no (or an unrecognized) day fall into their own bucket last.
+// A carpool covering more than one kid appears once, under its own day, with
+// all of the relevant kids' names on the row — not once per kid.
+function groupByDay(carpools: Carpool[]): DayGroup[] {
+  const buckets = new Map<DayOfWeek | null, Carpool[]>();
+  for (const c of carpools) {
+    const day = (DAYS_OF_WEEK as readonly string[]).includes(c.day) ? (c.day as DayOfWeek) : null;
+    if (!buckets.has(day)) buckets.set(day, []);
+    buckets.get(day)!.push(c);
+  }
+  const order: (DayOfWeek | null)[] = [...DAYS_OF_WEEK, null];
+  return order.filter((day) => buckets.has(day)).map((day) => ({ day, carpools: buckets.get(day)! }));
 }
 
 export function CarpoolsPage({
@@ -146,10 +176,52 @@ export function CarpoolsPage({
     }
   };
 
-  const groups = buildSections(carpools, memberId, profile.kids);
+  const dayGroups = groupByDay(carpools);
+  const today = DAYS_OF_WEEK[(new Date().getDay() + 6) % 7];
+  const todayCarpools = carpools.filter((c) => c.day === today);
 
   return (
     <div className="carpools-page">
+      {loading && <p className="muted">Loading...</p>}
+
+      {!loading && carpools.length === 0 && <p className="muted">No carpools yet.</p>}
+
+      {!loading && todayCarpools.length > 0 && (
+        <section className="today-summary">
+          <span className="carpool-row-meta carpool-day-label">Today</span>
+          {todayCarpools.map((c) => (
+            <TodayCarpoolRow
+              key={c.code}
+              carpool={c}
+              summary={summarizeCarpool(c, memberId) || "Nothing arranged yet."}
+              onOpen={() => onOpenCarpool(c)}
+            />
+          ))}
+        </section>
+      )}
+
+      {!loading && carpools.length > 0 && (
+        <section className="carpools-list">
+          {dayGroups.map(({ day, carpools: dayCarpools }) => (
+            <div className="carpool-day-group" key={day ?? "no-day"}>
+              <span className="carpool-row-meta carpool-day-label">{day ?? "No day set"}</span>
+              {dayCarpools.map((c) => (
+                <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
+                  <span className="carpool-row-name">{c.name}</span>
+                  <div className="carpool-row-summary">
+                    {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
+                      .split("\n")
+                      .map((line, i) => (
+                        <p key={i}>{line}</p>
+                      ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
+
       <div className="section-actions">
         <button type="button" className="pill-button secondary small" onClick={openJoin}>
           Join a carpool
@@ -158,26 +230,6 @@ export function CarpoolsPage({
           Start a carpool
         </button>
       </div>
-
-      {loading && <p className="muted">Loading...</p>}
-
-      {!loading &&
-        groups.map((group) => (
-          <section className="carpools-list" key={group.key}>
-            <h2>{group.label}</h2>
-            {group.carpools.length === 0 && (
-              <p className="muted">No carpools for {group.kid} yet.</p>
-            )}
-            {group.carpools.map((c) => (
-              <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
-                <span className="carpool-row-name">{c.name}</span>
-                <span className="carpool-row-meta">
-                  {c.members.length} member{c.members.length === 1 ? "" : "s"}
-                </span>
-              </button>
-            ))}
-          </section>
-        ))}
 
       <BottomSheet
         open={openDialog === "join"}
