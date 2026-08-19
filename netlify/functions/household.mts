@@ -17,7 +17,7 @@ export default async (req: Request) => {
   const memberId = new URL(req.url).searchParams.get("memberId");
   if (!memberId) return new Response("Missing memberId", { status: 400 });
 
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
 
   let code = (await store.get(`household-owner:${memberId}`)) as string | null;
   if (!code) {

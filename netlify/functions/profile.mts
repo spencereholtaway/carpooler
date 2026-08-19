@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 
 export default async (req: Request) => {
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
 
   if (req.method === "GET") {
     const memberId = new URL(req.url).searchParams.get("memberId");

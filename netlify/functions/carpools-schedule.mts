@@ -52,7 +52,7 @@ export default async (req: Request) => {
   };
   if (!code || !day) return new Response("Missing fields", { status: 400 });
 
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
   const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
   if (!carpool) return new Response("No carpool with that code", { status: 404 });
 

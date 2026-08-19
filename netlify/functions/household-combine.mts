@@ -11,7 +11,7 @@ export default async (req: Request) => {
   const { memberId, combined } = (await req.json()) as { memberId?: string; combined?: boolean };
   if (!memberId || typeof combined !== "boolean") return new Response("Missing fields", { status: 400 });
 
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
   const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
   if (!coParentId) return new Response("No linked co-parent", { status: 400 });
 

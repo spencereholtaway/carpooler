@@ -147,7 +147,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 }
 
 export default async (req: Request) => {
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
 
   if (req.method === "POST") return handleMutation(store, req);
 

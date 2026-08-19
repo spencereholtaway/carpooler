@@ -73,7 +73,7 @@ export default async (req: Request) => {
   const { code, memberId } = (await req.json()) as { code?: string; memberId?: string };
   if (!code || !memberId) return new Response("Missing fields", { status: 400 });
 
-  const store = getStore("carpools");
+  const store = getStore("carpools", { consistency: "strong" });
   const inviterId = (await store.get(`household:${code}`)) as string | null;
   if (!inviterId) return new Response("No invite with that code", { status: 404 });
   if (inviterId === memberId) return new Response("That's your own invite code", { status: 400 });
