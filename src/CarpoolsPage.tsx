@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createCarpool, joinCarpool, listCarpools } from "./api";
+import { BottomSheet } from "./BottomSheet";
+import { KidPicker } from "./KidPicker";
 import { DAYS_OF_WEEK, type Carpool, type DayOfWeek } from "./types";
 import type { LocalProfile } from "./useProfile";
 
@@ -35,11 +37,12 @@ export function CarpoolsPage({
     /^\d{6}$/.test(new URLSearchParams(window.location.search).get("join") ?? "")
   ).current;
 
-  // At most one section's join/create form is open at a time, identified by
-  // that section's kid plus which action was clicked.
-  const [openForm, setOpenForm] = useState<{ kid: string; type: "join" | "create" } | null>(
-    cameViaInviteLink && profile.kids[0] ? { kid: profile.kids[0], type: "join" } : null
+  const [openDialog, setOpenDialog] = useState<"join" | "create" | null>(
+    cameViaInviteLink ? "join" : null
   );
+  // Which of the parent's kids the join/create dialog currently has selected
+  // — not tied to any one section, so either flow can cover any combination.
+  const [selectedKids, setSelectedKids] = useState<string[]>(profile.kids);
   const [newName, setNewName] = useState("");
   const [day, setDay] = useState<DayOfWeek>("Monday");
   const [destStreet, setDestStreet] = useState("");
@@ -52,13 +55,11 @@ export function CarpoolsPage({
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const createInputRef = useRef<HTMLInputElement>(null);
   const joinInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (openForm?.type === "create") createInputRef.current?.focus();
-    if (openForm?.type === "join" && !cameViaInviteLink) joinInputRef.current?.focus();
-  }, [openForm, cameViaInviteLink]);
+    if (openDialog === "join" && !cameViaInviteLink) joinInputRef.current?.focus();
+  }, [openDialog, cameViaInviteLink]);
 
   useEffect(() => {
     listCarpools(memberId)
@@ -66,23 +67,28 @@ export function CarpoolsPage({
       .finally(() => setLoading(false));
   }, [memberId]);
 
-  const openSectionForm = (kid: string, type: "join" | "create") => {
+  const openJoin = () => {
+    setError(null);
+    setJoinCode("");
+    setSelectedKids(profile.kids);
+    setOpenDialog("join");
+  };
+
+  const openCreate = () => {
     setError(null);
     setNewName("");
-    setJoinCode("");
     setDay("Monday");
     setDestStreet("");
     setDestZip("");
     setDropOffTime("");
     setPickUpTime("");
-    setOpenForm({ kid, type });
+    setSelectedKids(profile.kids);
+    setOpenDialog("create");
   };
 
-  const handleCreate = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!openForm) return;
+  const handleCreate = async () => {
     const trimmed = newName.trim();
-    if (!trimmed) return;
+    if (!trimmed || selectedKids.length === 0) return;
     setCreating(true);
     setError(null);
     try {
@@ -90,7 +96,7 @@ export function CarpoolsPage({
         id: memberId,
         name: profile.name,
         seats: profile.seats,
-        kids: [openForm.kid],
+        kids: selectedKids,
         canDriveDropOff: false,
         canDrivePickUp: false,
         street: profile.street,
@@ -100,7 +106,7 @@ export function CarpoolsPage({
       const dropOff = { time: dropOffTime, cars: [] };
       const pickUp = { time: pickUpTime, cars: [] };
       onOpenCarpool(await createCarpool(trimmed, day, destination, dropOff, pickUp, member));
-      setOpenForm(null);
+      setOpenDialog(null);
     } catch {
       setError("Couldn't create that carpool. Try again.");
     } finally {
@@ -108,12 +114,14 @@ export function CarpoolsPage({
     }
   };
 
-  const handleJoin = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!openForm) return;
+  const handleJoin = async () => {
     const code = joinCode.trim();
     if (!/^\d{6}$/.test(code)) {
       setError("Codes are 6 digits.");
+      return;
+    }
+    if (selectedKids.length === 0) {
+      setError("Pick at least one kid.");
       return;
     }
     setJoining(true);
@@ -123,14 +131,14 @@ export function CarpoolsPage({
         id: memberId,
         name: profile.name,
         seats: profile.seats,
-        kids: [openForm.kid],
+        kids: selectedKids,
         canDriveDropOff: false,
         canDrivePickUp: false,
         street: profile.street,
         zip: profile.zip,
       };
       onOpenCarpool(await joinCarpool(code, member));
-      setOpenForm(null);
+      setOpenDialog(null);
     } catch {
       setError("No carpool found with that code.");
     } finally {
@@ -142,6 +150,15 @@ export function CarpoolsPage({
 
   return (
     <div className="carpools-page">
+      <div className="section-actions">
+        <button type="button" className="pill-button secondary small" onClick={openJoin}>
+          Join a carpool
+        </button>
+        <button type="button" className="pill-button secondary small" onClick={openCreate}>
+          Start a carpool
+        </button>
+      </div>
+
       {loading && <p className="muted">Loading...</p>}
 
       {!loading &&
@@ -159,130 +176,105 @@ export function CarpoolsPage({
                 </span>
               </button>
             ))}
-            <div className="section-actions">
-              <button
-                type="button"
-                className="pill-button secondary small"
-                onClick={() => openSectionForm(group.kid, "join")}
-              >
-                Join a carpool
-              </button>
-              <button
-                type="button"
-                className="pill-button secondary small"
-                onClick={() => openSectionForm(group.kid, "create")}
-              >
-                Start a carpool
-              </button>
-            </div>
-            {error && openForm?.kid === group.kid && <p className="form-error">{error}</p>}
-
-            {openForm?.kid === group.kid && openForm.type === "join" && (
-              <form className="mini-form primary pop-in" onSubmit={handleJoin}>
-                <div className="mini-form-header">
-                  <h3>Join with a code for {group.kid}</h3>
-                  <button
-                    type="button"
-                    className="close-x"
-                    onClick={() => setOpenForm(null)}
-                    aria-label="Close"
-                  >
-                    &times;
-                  </button>
-                </div>
-                <input
-                  ref={joinInputRef}
-                  placeholder="6-digit code"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
-                  required
-                />
-                <button type="submit" className="pill-button" disabled={joining}>
-                  {joining ? "Joining..." : "Join"}
-                </button>
-              </form>
-            )}
-
-            {openForm?.kid === group.kid && openForm.type === "create" && (
-              <form className="profile-editor-form pop-in" onSubmit={handleCreate}>
-                <div className="mini-form">
-                  <div className="mini-form-header">
-                    <h3>Start a carpool for {group.kid}</h3>
-                    <button
-                      type="button"
-                      className="close-x"
-                      onClick={() => setOpenForm(null)}
-                      aria-label="Close"
-                    >
-                      &times;
-                    </button>
-                  </div>
-                  <input
-                    ref={createInputRef}
-                    placeholder="e.g. Lincoln Elementary mornings"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mini-form">
-                  <h4>Day</h4>
-                  <select value={day} onChange={(e) => setDay(e.target.value as DayOfWeek)}>
-                    {DAYS_OF_WEEK.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mini-form">
-                  <h4>Destination</h4>
-                  <div className="form-field">
-                    <span className="gate-field-label">Street address</span>
-                    <input value={destStreet} onChange={(e) => setDestStreet(e.target.value)} />
-                  </div>
-                  <div className="form-field">
-                    <span className="gate-field-label">Zip code</span>
-                    <input
-                      value={destZip}
-                      onChange={(e) => setDestZip(e.target.value)}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
-
-                <div className="mini-form">
-                  <h4>Drop-off time</h4>
-                  <input
-                    type="time"
-                    value={dropOffTime}
-                    onChange={(e) => setDropOffTime(e.target.value)}
-                    onInvalid={(e) => e.preventDefault()}
-                  />
-                </div>
-
-                <div className="mini-form">
-                  <h4>Pick-up time</h4>
-                  <input
-                    type="time"
-                    value={pickUpTime}
-                    onChange={(e) => setPickUpTime(e.target.value)}
-                    onInvalid={(e) => e.preventDefault()}
-                  />
-                </div>
-
-                <div className="floating-save-bar">
-                  <button type="submit" className="pill-button" disabled={creating}>
-                    {creating ? "Creating..." : "Create carpool"}
-                  </button>
-                </div>
-              </form>
-            )}
           </section>
         ))}
+
+      <BottomSheet
+        open={openDialog === "join"}
+        onClose={() => setOpenDialog(null)}
+        title="Join a carpool"
+        footer={
+          <button type="button" className="pill-button" onClick={handleJoin} disabled={joining}>
+            {joining ? "Joining..." : "Join"}
+          </button>
+        }
+      >
+        <div className="form-field">
+          <span className="gate-field-label">Invite code</span>
+          <input
+            ref={joinInputRef}
+            placeholder="6-digit code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            inputMode="numeric"
+          />
+        </div>
+        <KidPicker
+          allKids={profile.kids}
+          selected={selectedKids}
+          onChange={setSelectedKids}
+          label="Which of your kids are joining this carpool?"
+        />
+        {error && <p className="form-error">{error}</p>}
+      </BottomSheet>
+
+      <BottomSheet
+        open={openDialog === "create"}
+        onClose={() => setOpenDialog(null)}
+        title="Start a carpool"
+        footer={
+          <button
+            type="button"
+            className="pill-button"
+            onClick={handleCreate}
+            disabled={creating || !newName.trim() || selectedKids.length === 0}
+          >
+            {creating ? "Creating..." : "Create carpool"}
+          </button>
+        }
+      >
+        <div className="form-field">
+          <span className="gate-field-label">Carpool name</span>
+          <input
+            placeholder="e.g. Lincoln Elementary mornings"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Day</span>
+          <select value={day} onChange={(e) => setDay(e.target.value as DayOfWeek)}>
+            {DAYS_OF_WEEK.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Street address</span>
+          <input value={destStreet} onChange={(e) => setDestStreet(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Zip code</span>
+          <input value={destZip} onChange={(e) => setDestZip(e.target.value)} inputMode="numeric" />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Drop-off time</span>
+          <input
+            type="time"
+            value={dropOffTime}
+            onChange={(e) => setDropOffTime(e.target.value)}
+            onInvalid={(e) => e.preventDefault()}
+          />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Pick-up time</span>
+          <input
+            type="time"
+            value={pickUpTime}
+            onChange={(e) => setPickUpTime(e.target.value)}
+            onInvalid={(e) => e.preventDefault()}
+          />
+        </div>
+        <KidPicker
+          allKids={profile.kids}
+          selected={selectedKids}
+          onChange={setSelectedKids}
+          label="Which of your kids are in this carpool?"
+        />
+        {error && <p className="form-error">{error}</p>}
+      </BottomSheet>
     </div>
   );
 }

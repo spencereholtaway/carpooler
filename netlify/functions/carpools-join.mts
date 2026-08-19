@@ -63,16 +63,24 @@ async function autoAddCoParent(
 
 // Keep a leg's car list in sync with a member's driving toggle: drop their
 // car if they can no longer drive it, or give them one (defaulting to their
-// own unclaimed kids) if they now can and don't have one yet.
+// own unclaimed kids) if they now can and don't have one yet. If they
+// already have a car, also fold in any of their own kids that aren't
+// claimed anywhere yet — e.g. a kid just re-added to this carpool — so a
+// re-added kid defaults back to riding with them instead of no one.
 function syncCar(leg: Leg, member: Member, canDrive: boolean) {
   leg.cars ??= [];
   if (!canDrive) {
     leg.cars = leg.cars.filter((c) => c.driverId !== member.id);
     return;
   }
-  if (leg.cars.some((c) => c.driverId === member.id)) return;
   const claimed = new Set(leg.cars.flatMap((c) => c.kids));
-  leg.cars.push({ driverId: member.id, kids: member.kids.filter((k) => !claimed.has(k)) });
+  const unclaimedOwnKids = member.kids.filter((k) => !claimed.has(k));
+  const existing = leg.cars.find((c) => c.driverId === member.id);
+  if (existing) {
+    if (unclaimedOwnKids.length > 0) existing.kids = [...existing.kids, ...unclaimedOwnKids];
+    return;
+  }
+  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids });
 }
 
 export default async (req: Request) => {
@@ -93,6 +101,7 @@ export default async (req: Request) => {
 
   const existingIndex = carpool.members.findIndex((m) => m.id === member.id);
   const isNewJoin = existingIndex === -1;
+  const previousKids = isNewJoin ? [] : carpool.members[existingIndex].kids;
   if (isNewJoin) {
     carpool.members.push(member);
   } else {
@@ -101,6 +110,20 @@ export default async (req: Request) => {
 
   carpool.dropOff ??= { time: "", cars: [] };
   carpool.pickUp ??= { time: "", cars: [] };
+
+  // A kid dropped from this member's roster (e.g. taken off this carpool
+  // entirely) may still be sitting in someone else's car from an earlier
+  // move — unless a co-parent still legitimately claims them, that ride is
+  // no longer valid for anyone, so clear it out of every car on both legs.
+  const stillOwned = new Set(carpool.members.filter((m) => m.id !== member.id).flatMap((m) => m.kids));
+  const kidsToClear = previousKids.filter((k) => !member.kids.includes(k) && !stillOwned.has(k));
+  if (kidsToClear.length > 0) {
+    const removeSet = new Set(kidsToClear);
+    for (const leg of [carpool.dropOff, carpool.pickUp]) {
+      leg.cars = leg.cars.map((c) => ({ ...c, kids: c.kids.filter((k) => !removeSet.has(k)) }));
+    }
+  }
+
   syncCar(carpool.dropOff, member, member.canDriveDropOff);
   syncCar(carpool.pickUp, member, member.canDrivePickUp);
 

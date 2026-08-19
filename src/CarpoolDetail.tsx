@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
+import { BottomSheet } from "./BottomSheet";
 import { KidPicker } from "./KidPicker";
 import { mapsLink } from "./maps";
-import type { Car, Carpool, Member } from "./types";
+import { DAYS_OF_WEEK, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
 
 function formatTime(time: string) {
   if (!time) return "no time set";
@@ -26,6 +27,123 @@ function computeKidDefaults(members: Member[]): Map<string, string> {
   return defaults;
 }
 
+function joinList(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+// Purely cosmetic: re-"types" the AI summary out a character at a time
+// whenever it changes, instead of just popping in fully formed. Pace varies
+// per character — with a lingering beat after spaces and punctuation — so it
+// reads like someone typing rather than a metronome.
+function useTypewriter(text: string, baseSpeed = 30): { display: string; done: boolean } {
+  const [display, setDisplay] = useState("");
+  useEffect(() => {
+    setDisplay("");
+    if (!text) return;
+    let i = 0;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = () => {
+      const lastChar = text[i - 1];
+      const pause = /[.,!?]/.test(lastChar ?? "")
+        ? baseSpeed * 5
+        : lastChar === " "
+          ? baseSpeed * 1.6
+          : baseSpeed;
+      timeoutId = setTimeout(tick, pause * (0.6 + Math.random() * 0.8));
+    };
+
+    const tick = () => {
+      if (cancelled) return;
+      i += 1;
+      setDisplay(text.slice(0, i));
+      if (i < text.length) scheduleNext();
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { display, done: display.length === text.length };
+}
+
+// Mirrors DrivingLeg's own per-row resolution: a kid rides in an explicit
+// car if one claims them, otherwise they default to riding with whichever
+// parent owns them (kidDefaults) even though that parent has no car entry —
+// same "you're always good for your own kid" assumption the driving rows
+// display, so the summary below has to agree with what those rows show.
+function resolveKidDrivers(
+  cars: Car[],
+  members: Member[],
+  kidDefaults: Map<string, string>
+): Map<string, string> {
+  const kidToDriver = new Map<string, string>();
+  for (const car of cars) for (const k of car.kids) kidToDriver.set(k, car.driverId);
+
+  const assignedElsewhere = new Set(kidToDriver.keys());
+  for (const m of members) {
+    if (cars.some((c) => c.driverId === m.id)) continue;
+    for (const k of m.kids) {
+      if (!assignedElsewhere.has(k) && kidDefaults.get(k) === m.id) kidToDriver.set(k, m.id);
+    }
+  }
+  return kidToDriver;
+}
+
+// Boils a leg's ride assignments down to what actually matters to this one
+// member: everyone they're driving (their own kids and anyone else's riding
+// along), and — for their own kids they aren't driving — who is, or that
+// nobody's arranged it yet.
+function legSentences(
+  kidToDriver: Map<string, string>,
+  allCarpoolKids: string[],
+  leg: "dropOff" | "pickUp",
+  selfId: string,
+  selfKids: string[],
+  members: Member[]
+): string[] {
+  const sentences: string[] = [];
+  const drivenBySelf = allCarpoolKids.filter((k) => kidToDriver.get(k) === selfId);
+  if (drivenBySelf.length > 0) {
+    sentences.push(
+      leg === "dropOff"
+        ? `You're taking ${joinList(drivenBySelf)} there.`
+        : `You're picking ${joinList(drivenBySelf)} up.`
+    );
+  }
+
+  const otherGroups = new Map<string, string[]>();
+  const unarranged: string[] = [];
+  for (const kid of selfKids) {
+    if (drivenBySelf.includes(kid)) continue;
+    const driverId = kidToDriver.get(kid);
+    if (driverId) {
+      if (!otherGroups.has(driverId)) otherGroups.set(driverId, []);
+      otherGroups.get(driverId)!.push(kid);
+    } else {
+      unarranged.push(kid);
+    }
+  }
+  for (const [driverId, kids] of otherGroups) {
+    const name = members.find((m) => m.id === driverId)?.name ?? "Someone";
+    sentences.push(
+      leg === "dropOff"
+        ? `${name} is taking ${joinList(kids)} there.`
+        : `${name} is picking ${joinList(kids)} up.`
+    );
+  }
+  if (unarranged.length > 0) {
+    sentences.push(`No ride arranged yet for ${joinList(unarranged)}.`);
+  }
+  return sentences;
+}
+
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
   const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
   if (!driverId) return cleared;
@@ -38,32 +156,48 @@ function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
   return cleared.map((c) => (c.driverId === driverId ? { ...c, kids: [...c.kids, kid] } : c));
 }
 
-function BottomSheet({
-  open,
-  onClose,
-  title,
-  children,
-  footer,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: ReactNode;
-  footer?: ReactNode;
-}) {
-  if (!open) return null;
+// A kid only needs offering, not auto-moving: they're already claimed by
+// someone else's explicit car for this leg, so joining as a driver doesn't
+// pull them along automatically (see syncCar server-side) — this surfaces
+// that gap so the parent can choose instead of it happening silently.
+function kidsToOfferMove(cars: Car[], selfId: string, selfKids: string[]): string[] {
+  return selfKids.filter((k) => {
+    const car = cars.find((c) => c.kids.includes(k));
+    return car !== undefined && car.driverId !== selfId;
+  });
+}
 
+function AiMovePrompt({
+  kids,
+  legLabel,
+  onConfirm,
+  onDismiss,
+  busy,
+}: {
+  kids: string[];
+  legLabel: string;
+  onConfirm: () => void;
+  onDismiss: () => void;
+  busy: boolean;
+}) {
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="bottom-sheet-header">
-          <h3>{title}</h3>
-          <button type="button" className="close-x" onClick={onClose} aria-label="Close">
-            &times;
-          </button>
-        </div>
-        <div className="bottom-sheet-body">{children}</div>
-        {footer && <div className="bottom-sheet-footer">{footer}</div>}
+    <div className="ai-prompt pop-in">
+      <span className="ai-summary-badge">
+        <span className="ai-summary-sparkle" aria-hidden="true">
+          ✨
+        </span>
+        <span className="ai-summary-name">blisspoolAI</span>
+      </span>
+      <p className="ai-prompt-text">
+        Move {joinList(kids)} into your car for {legLabel}?
+      </p>
+      <div className="ai-prompt-actions">
+        <button type="button" className="pill-button small" onClick={onConfirm} disabled={busy}>
+          {busy ? "Moving..." : "Yes"}
+        </button>
+        <button type="button" className="pill-button small secondary" onClick={onDismiss} disabled={busy}>
+          No
+        </button>
       </div>
     </div>
   );
@@ -122,7 +256,6 @@ function DrivingLeg({
   members,
   memberId,
   eligibleFor,
-  movingKid,
   onCarsChange,
   kidDefaults,
   coParentId,
@@ -134,14 +267,19 @@ function DrivingLeg({
   members: Member[];
   memberId: string;
   eligibleFor: (m: Member) => boolean;
-  movingKid: string | null;
   onCarsChange: (cars: Car[]) => void;
   kidDefaults: Map<string, string>;
   coParentId: string | null;
   householdCombined: boolean;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const myKids = new Set(members.find((m) => m.id === memberId)?.kids ?? []);
+  // Kept mounted a beat after collapsing so its slide/pop-out animation has
+  // something to play — expandedRow alone would unmount it instantly.
+  const [closingRow, setClosingRow] = useState<string | null>(null);
+  const [selectedKids, setSelectedKids] = useState<string[]>([]);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const selfKidsList = members.find((m) => m.id === memberId)?.kids ?? [];
+  const myKids = new Set(selfKidsList);
 
   // Not driving a leg doesn't mean your kid has no ride — it defaults to
   // riding with whichever parent owns it by default, unless someone has
@@ -162,11 +300,10 @@ function DrivingLeg({
     // A parent can always move their own kid into their own car, even if
     // they haven't marked "I can drive" for this leg — that toggle only
     // gates offering up free seats to other members' kids.
-    const isOwnKid = movingKid !== null && m.kids.includes(movingKid);
-    const alreadyHere = movingKid !== null && kids.includes(movingKid);
-    const canMoveHere = movingKid !== null && !alreadyHere && (isSelf || isOwnKid || (eligible && free > 0));
+    const movableKids = selfKidsList.filter((k) => !kids.includes(k));
+    const canMoveHere = movableKids.length > 0 && (isSelf || (eligible && free > 0));
     const isCoParent = m.id === coParentId;
-    return { m, kids, eligible, free, isSelf, isCoParent, canMoveHere };
+    return { m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids };
   });
 
   // You first, then your co-parent, then cars with free seats, then everyone
@@ -178,6 +315,13 @@ function DrivingLeg({
     return rankDiff !== 0 ? rankDiff : a.m.name.localeCompare(b.m.name);
   });
 
+  const closeRow = (id: string) => {
+    setClosingRow(id);
+    setExpandedRow(null);
+    setSelectedKids([]);
+    setMoveError(null);
+  };
+
   return (
     <div className="mini-form">
       <div className="driving-leg-header">
@@ -185,13 +329,62 @@ function DrivingLeg({
         <span className="driving-leg-time muted">{formatTime(time)}</span>
       </div>
       <div className="driving-row-list">
-        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere }) => {
+        {rows.map(({ m, kids, eligible, free, isSelf, isCoParent, canMoveHere, movableKids }) => {
           const expanded = canMoveHere && expandedRow === m.id;
+          const closing = canMoveHere && closingRow === m.id;
+          const multiPick = movableKids.length > 1;
+
+          // Selecting past this car's free-seat capacity swaps in the new
+          // kid for the oldest one already picked (with a note explaining
+          // why) rather than silently refusing — a kid's own parent riding
+          // along never counts against the driver's seats.
+          const toggleSelect = (kid: string) => {
+            const costsSeat = !m.kids.includes(kid);
+            setSelectedKids((prev) => {
+              if (prev.includes(kid)) {
+                setMoveError(null);
+                return prev.filter((k) => k !== kid);
+              }
+              const usedSeats = prev.filter((k) => !m.kids.includes(k)).length;
+              if (costsSeat && usedSeats >= free) {
+                const evictIndex = prev.findIndex((k) => !m.kids.includes(k));
+                if (evictIndex === -1) {
+                  setMoveError(
+                    free === 0 ? "No free seats here." : `Only ${free} free seat${free === 1 ? "" : "s"} here.`
+                  );
+                  return prev;
+                }
+                const evicted = prev[evictIndex];
+                setMoveError(
+                  `Only ${free} free seat${free === 1 ? "" : "s"} here — swapped ${evicted} for ${kid}.`
+                );
+                return [...prev.slice(0, evictIndex), ...prev.slice(evictIndex + 1), kid];
+              }
+              setMoveError(null);
+              return [...prev, kid];
+            });
+          };
+
+          const commitMove = (kidsToMove: string[]) => {
+            onCarsChange(kidsToMove.reduce((acc, kid) => moveKid(acc, kid, m.id), cars));
+            closeRow(m.id);
+          };
+
           return (
             <div
               className={`driving-row ${canMoveHere ? "tappable" : ""}`}
               key={m.id}
-              onClick={() => canMoveHere && setExpandedRow(expanded ? null : m.id)}
+              onClick={() => {
+                if (!canMoveHere) return;
+                if (expandedRow === m.id) {
+                  closeRow(m.id);
+                } else {
+                  if (expandedRow) setClosingRow(expandedRow);
+                  setExpandedRow(m.id);
+                  setSelectedKids([]);
+                  setMoveError(null);
+                }
+              }}
             >
               <div className="driving-row-top">
                 <div className="driving-row-main">
@@ -213,25 +406,63 @@ function DrivingLeg({
                     )}
                   </div>
                 </div>
-                <span className={`seat-status ${eligible ? "" : "off"}`}>
-                  {eligible
-                    ? `${free} free seat${free === 1 ? "" : "s"}`
-                    : isCoParent
-                      ? "Coparent"
-                      : "No free seats"}
-                </span>
+                <div className="driving-row-actions">
+                  <span className={`seat-status ${eligible ? "" : "off"}`}>
+                    {eligible
+                      ? free > 0
+                        ? `${free} free seat${free === 1 ? "" : "s"}`
+                        : "No free seats"
+                      : isCoParent
+                        ? "Coparent"
+                        : "Can't carpool"}
+                  </span>
+                  {(expanded || closing) && !multiPick && (
+                    <button
+                      type="button"
+                      className={`pill-button small move-here-button ${!expanded && closing ? "closing" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        commitMove(movableKids);
+                      }}
+                      onAnimationEnd={() => {
+                        if (!expanded && closing) setClosingRow((c) => (c === m.id ? null : c));
+                      }}
+                    >
+                      Move {movableKids[0]} here
+                    </button>
+                  )}
+                </div>
               </div>
-              {expanded && (
-                <button
-                  type="button"
-                  className="pill-button small move-here-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCarsChange(moveKid(cars, movingKid as string, m.id));
+              {(expanded || closing) && multiPick && (
+                <div
+                  className={`move-kid-picker ${!expanded && closing ? "closing" : "pop-in"}`}
+                  onClick={(e) => e.stopPropagation()}
+                  onAnimationEnd={() => {
+                    if (!expanded && closing) setClosingRow((c) => (c === m.id ? null : c));
                   }}
                 >
-                  Move {movingKid} here
-                </button>
+                  <div className="kid-tags">
+                    {movableKids.map((kid) => (
+                      <button
+                        type="button"
+                        key={kid}
+                        className={`kid-pick ${selectedKids.includes(kid) ? "active" : ""}`}
+                        onClick={() => toggleSelect(kid)}
+                      >
+                        {kid}
+                      </button>
+                    ))}
+                  </div>
+                  {moveError && <p className="form-error">{moveError}</p>}
+                  <button
+                    type="button"
+                    className="pill-button small"
+                    disabled={selectedKids.length === 0}
+                    onClick={() => commitMove(selectedKids)}
+                  >
+                    Move {selectedKids.length > 0 ? joinList(selectedKids) : "kids"} here
+                  </button>
+                </div>
               )}
             </div>
           );
@@ -255,17 +486,26 @@ export function CarpoolDetail({
   onCarpoolUpdated: (carpool: Carpool) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const [editingKids, setEditingKids] = useState(false);
+  const [editingCarpool, setEditingCarpool] = useState(false);
   const [saving, setSaving] = useState(false);
   const [togglingDropOff, setTogglingDropOff] = useState(false);
   const [togglingPickUp, setTogglingPickUp] = useState(false);
-  const [movingKid, setMovingKid] = useState<string | null>(null);
-  const [showMoveDialog, setShowMoveDialog] = useState(false);
-  const [dialogKid, setDialogKid] = useState<string | null>(null);
+  const [movePrompt, setMovePrompt] = useState<{ leg: "dropOff" | "pickUp"; kids: string[] } | null>(
+    null
+  );
+  const [applyingMovePrompt, setApplyingMovePrompt] = useState(false);
 
   const self = carpool.members.find((m) => m.id === memberId);
+  // With nobody else to coordinate with yet, "who's driving who" has only
+  // one answer — swap that whole section out for a prominent invite instead.
+  const soloMember = carpool.members.length === 1;
   const [draftKids, setDraftKids] = useState<string[]>(self?.kids ?? []);
   const [draftName, setDraftName] = useState(carpool.name);
+  const [draftDay, setDraftDay] = useState<DayOfWeek>(carpool.day);
+  const [draftStreet, setDraftStreet] = useState(carpool.destination?.street ?? "");
+  const [draftZip, setDraftZip] = useState(carpool.destination?.zip ?? "");
+  const [draftDropOffTime, setDraftDropOffTime] = useState(carpool.dropOff?.time ?? "");
+  const [draftPickUpTime, setDraftPickUpTime] = useState(carpool.pickUp?.time ?? "");
   const [household, setHousehold] = useState<{ coParentId: string | null; combined: boolean } | null>(
     null
   );
@@ -275,11 +515,41 @@ export function CarpoolDetail({
   }, [memberId]);
 
   const kidDefaults = computeKidDefaults(carpool.members);
+  const allCarpoolKids = [...new Set(carpool.members.flatMap((m) => m.kids))];
 
-  const openKidsEditor = () => {
+  const youSummary = self
+    ? [
+        legSentences(
+          resolveKidDrivers(carpool.dropOff?.cars ?? [], carpool.members, kidDefaults),
+          allCarpoolKids,
+          "dropOff",
+          memberId,
+          self.kids,
+          carpool.members
+        ).join(" "),
+        legSentences(
+          resolveKidDrivers(carpool.pickUp?.cars ?? [], carpool.members, kidDefaults),
+          allCarpoolKids,
+          "pickUp",
+          memberId,
+          self.kids,
+          carpool.members
+        ).join(" "),
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+  const { display: typedSummary, done: typingDone } = useTypewriter(youSummary);
+
+  const openCarpoolEditor = () => {
     setDraftKids(self?.kids ?? []);
     setDraftName(carpool.name);
-    setEditingKids(true);
+    setDraftDay(carpool.day);
+    setDraftStreet(carpool.destination?.street ?? "");
+    setDraftZip(carpool.destination?.zip ?? "");
+    setDraftDropOffTime(carpool.dropOff?.time ?? "");
+    setDraftPickUpTime(carpool.pickUp?.time ?? "");
+    setEditingCarpool(true);
   };
 
   const copyLink = async () => {
@@ -289,28 +559,21 @@ export function CarpoolDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // With only one kid there's no ambiguity to resolve, so skip the picker
-  // dialog entirely and let the driving rows' move buttons act on them directly.
-  const effectiveMovingKid = self?.kids.length === 1 ? self.kids[0] : movingKid;
-
-  const saveKids = async () => {
+  const saveCarpool = async () => {
     if (!self) return;
     setSaving(true);
     try {
-      let updated = carpool;
-      if (draftName.trim() && draftName !== carpool.name) {
-        updated = await updateCarpoolSchedule(
-          carpool.code,
-          carpool.day,
-          carpool.destination,
-          carpool.dropOff,
-          carpool.pickUp,
-          draftName.trim()
-        );
-      }
-      updated = await joinCarpool(carpool.code, { ...self, kids: draftKids });
-      onCarpoolUpdated(updated);
-      setEditingKids(false);
+      const updated = await updateCarpoolSchedule(
+        carpool.code,
+        draftDay,
+        { street: draftStreet.trim(), zip: draftZip.trim() },
+        { time: draftDropOffTime, cars: carpool.dropOff?.cars ?? [] },
+        { time: draftPickUpTime, cars: carpool.pickUp?.cars ?? [] },
+        draftName.trim() || undefined
+      );
+      const withKids = await joinCarpool(updated.code, { ...self, kids: draftKids });
+      onCarpoolUpdated(withKids);
+      setEditingCarpool(false);
     } finally {
       setSaving(false);
     }
@@ -320,11 +583,19 @@ export function CarpoolDetail({
     if (!self) return;
     setTogglingDropOff(true);
     try {
+      const turningOn = !self.canDriveDropOff;
       const updated = await joinCarpool(carpool.code, {
         ...self,
-        canDriveDropOff: !self.canDriveDropOff,
+        canDriveDropOff: turningOn,
       });
       onCarpoolUpdated(updated);
+      if (turningOn) {
+        const updatedSelf = updated.members.find((m) => m.id === memberId);
+        const offer = kidsToOfferMove(updated.dropOff?.cars ?? [], memberId, updatedSelf?.kids ?? []);
+        setMovePrompt(offer.length > 0 ? { leg: "dropOff", kids: offer } : null);
+      } else {
+        setMovePrompt((p) => (p?.leg === "dropOff" ? null : p));
+      }
     } finally {
       setTogglingDropOff(false);
     }
@@ -334,11 +605,19 @@ export function CarpoolDetail({
     if (!self) return;
     setTogglingPickUp(true);
     try {
+      const turningOn = !self.canDrivePickUp;
       const updated = await joinCarpool(carpool.code, {
         ...self,
-        canDrivePickUp: !self.canDrivePickUp,
+        canDrivePickUp: turningOn,
       });
       onCarpoolUpdated(updated);
+      if (turningOn) {
+        const updatedSelf = updated.members.find((m) => m.id === memberId);
+        const offer = kidsToOfferMove(updated.pickUp?.cars ?? [], memberId, updatedSelf?.kids ?? []);
+        setMovePrompt(offer.length > 0 ? { leg: "pickUp", kids: offer } : null);
+      } else {
+        setMovePrompt((p) => (p?.leg === "pickUp" ? null : p));
+      }
     } finally {
       setTogglingPickUp(false);
     }
@@ -353,8 +632,22 @@ export function CarpoolDetail({
       leg === "pickUp" ? { time: carpool.pickUp?.time ?? "", cars } : carpool.pickUp
     );
     onCarpoolUpdated(updated);
-    setMovingKid(null);
   };
+
+  const applyMovePrompt = async () => {
+    if (!movePrompt) return;
+    setApplyingMovePrompt(true);
+    try {
+      const currentCars = movePrompt.leg === "dropOff" ? carpool.dropOff?.cars ?? [] : carpool.pickUp?.cars ?? [];
+      const cars = movePrompt.kids.reduce((acc, kid) => moveKid(acc, kid, memberId), currentCars);
+      await updateLegCars(movePrompt.leg, cars);
+    } finally {
+      setApplyingMovePrompt(false);
+      setMovePrompt(null);
+    }
+  };
+
+  const dismissMovePrompt = () => setMovePrompt(null);
 
   return (
     <div className="carpool-detail">
@@ -365,7 +658,7 @@ export function CarpoolDetail({
         <div className="carpool-name-row">
           <h2>{carpool.name}</h2>
           {self && (
-            <button type="button" className="text-link" onClick={openKidsEditor}>
+            <button type="button" className="text-link" onClick={openCarpoolEditor}>
               edit
             </button>
           )}
@@ -394,126 +687,125 @@ export function CarpoolDetail({
             )}
           </div>
           <div className="schedule-legs">
-            <LegToggleRow
-              label="Drop-off"
-              time={carpool.dropOff?.time ?? ""}
-              checked={self?.canDriveDropOff ?? false}
-              disabled={!self || togglingDropOff}
-              onToggle={toggleDropOff}
-            />
-            <LegToggleRow
-              label="Pick-up"
-              time={carpool.pickUp?.time ?? ""}
-              checked={self?.canDrivePickUp ?? false}
-              disabled={!self || togglingPickUp}
-              onToggle={togglePickUp}
-            />
+            <div className="leg-toggle-stack">
+              <LegToggleRow
+                label="Drop-off"
+                time={carpool.dropOff?.time ?? ""}
+                checked={self?.canDriveDropOff ?? false}
+                disabled={!self || togglingDropOff}
+                onToggle={toggleDropOff}
+              />
+              {movePrompt?.leg === "dropOff" && (
+                <AiMovePrompt
+                  kids={movePrompt.kids}
+                  legLabel="drop-off"
+                  onConfirm={applyMovePrompt}
+                  onDismiss={dismissMovePrompt}
+                  busy={applyingMovePrompt}
+                />
+              )}
+            </div>
+            <div className="leg-toggle-stack">
+              <LegToggleRow
+                label="Pick-up"
+                time={carpool.pickUp?.time ?? ""}
+                checked={self?.canDrivePickUp ?? false}
+                disabled={!self || togglingPickUp}
+                onToggle={togglePickUp}
+              />
+              {movePrompt?.leg === "pickUp" && (
+                <AiMovePrompt
+                  kids={movePrompt.kids}
+                  legLabel="pick-up"
+                  onConfirm={applyMovePrompt}
+                  onDismiss={dismissMovePrompt}
+                  busy={applyingMovePrompt}
+                />
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="invite-box">
-          <span className="invite-label">Invite code</span>
-          <span className="invite-code">{carpool.code}</span>
-          <button type="button" className="pill-button secondary" onClick={copyLink}>
-            {copied ? "Copied!" : "Copy invite link"}
-          </button>
-        </div>
+        {!soloMember && (
+          <div className="invite-box">
+            <span className="invite-label">Invite code</span>
+            <span className="invite-code">{carpool.code}</span>
+            <button type="button" className="pill-button secondary" onClick={copyLink}>
+              {copied ? "Copied!" : "Copy invite link"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="carpool-detail-main">
-        <h3 className="bliss-heading">Who's driving who?</h3>
-        {self && self.kids.length > 1 && (
-          <div className="move-kid-control">
-            <div className="move-kid-trigger">
-              <button
-                type="button"
-                className="pill-button small secondary"
-                onClick={() => {
-                  setDialogKid(movingKid);
-                  setShowMoveDialog((v) => !v);
-                }}
-              >
-                {movingKid ? `Moving ${movingKid}` : "Move a kid"}
+        {soloMember ? (
+          <div className="solo-invite-panel">
+            <h3 className="bliss-heading">You're the only one here so far</h3>
+            <p className="muted">Share this code to get someone else driving with you.</p>
+            <div className="invite-box invite-box-main">
+              <span className="invite-label">Invite code</span>
+              <span className="invite-code">{carpool.code}</span>
+              <button type="button" className="pill-button secondary" onClick={copyLink}>
+                {copied ? "Copied!" : "Copy invite link"}
               </button>
-              {movingKid && (
-                <button
-                  type="button"
-                  className="text-link"
-                  onClick={() => {
-                    setMovingKid(null);
-                    setShowMoveDialog(false);
-                  }}
-                >
-                  cancel
-                </button>
-              )}
             </div>
-            {showMoveDialog && (
-              <div className="move-kid-dialog pop-in">
-                <span className="gate-field-label">Which kid?</span>
-                <div className="kid-tags">
-                  {self.kids.map((kid) => (
-                    <button
-                      type="button"
-                      key={kid}
-                      className={`kid-pick ${dialogKid === kid ? "active" : ""}`}
-                      onClick={() => setDialogKid(dialogKid === kid ? null : kid)}
-                    >
-                      {kid}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="pill-button small"
-                  disabled={!dialogKid}
-                  onClick={() => {
-                    setMovingKid(dialogKid);
-                    setShowMoveDialog(false);
-                  }}
-                >
-                  Move
-                </button>
-              </div>
-            )}
           </div>
+        ) : (
+          <>
+            {self && youSummary ? (
+              <div className="ai-summary">
+                <span className="ai-summary-badge">
+                  <span className="ai-summary-sparkle" aria-hidden="true">
+                    ✨
+                  </span>
+                  <span className="ai-summary-name">blisspoolAI</span>
+                  <span className="ai-summary-live" aria-hidden="true" />
+                </span>
+                <p className="ai-summary-quote">
+                  {typedSummary}
+                  <span
+                    className={`ai-summary-cursor ${typingDone ? "" : "typing"}`}
+                    aria-hidden="true"
+                  />
+                </p>
+              </div>
+            ) : (
+              <h3 className="bliss-heading">Who's driving who?</h3>
+            )}
+            <DrivingLeg
+              label="Drop-off"
+              time={carpool.dropOff?.time ?? ""}
+              cars={carpool.dropOff?.cars ?? []}
+              members={carpool.members}
+              memberId={memberId}
+              eligibleFor={(m) => m.canDriveDropOff}
+              onCarsChange={(cars) => updateLegCars("dropOff", cars)}
+              kidDefaults={kidDefaults}
+              coParentId={household?.coParentId ?? null}
+              householdCombined={household?.combined ?? false}
+            />
+            <DrivingLeg
+              label="Pick-up"
+              time={carpool.pickUp?.time ?? ""}
+              cars={carpool.pickUp?.cars ?? []}
+              members={carpool.members}
+              memberId={memberId}
+              eligibleFor={(m) => m.canDrivePickUp}
+              onCarsChange={(cars) => updateLegCars("pickUp", cars)}
+              kidDefaults={kidDefaults}
+              coParentId={household?.coParentId ?? null}
+              householdCombined={household?.combined ?? false}
+            />
+          </>
         )}
-        <DrivingLeg
-          key={`dropOff-${effectiveMovingKid ?? "none"}`}
-          label="Drop-off"
-          time={carpool.dropOff?.time ?? ""}
-          cars={carpool.dropOff?.cars ?? []}
-          members={carpool.members}
-          memberId={memberId}
-          eligibleFor={(m) => m.canDriveDropOff}
-          movingKid={effectiveMovingKid}
-          onCarsChange={(cars) => updateLegCars("dropOff", cars)}
-          kidDefaults={kidDefaults}
-          coParentId={household?.coParentId ?? null}
-          householdCombined={household?.combined ?? false}
-        />
-        <DrivingLeg
-          key={`pickUp-${effectiveMovingKid ?? "none"}`}
-          label="Pick-up"
-          time={carpool.pickUp?.time ?? ""}
-          cars={carpool.pickUp?.cars ?? []}
-          members={carpool.members}
-          memberId={memberId}
-          eligibleFor={(m) => m.canDrivePickUp}
-          movingKid={effectiveMovingKid}
-          onCarsChange={(cars) => updateLegCars("pickUp", cars)}
-          kidDefaults={kidDefaults}
-          coParentId={household?.coParentId ?? null}
-          householdCombined={household?.combined ?? false}
-        />
       </div>
 
       <BottomSheet
-        open={editingKids}
-        onClose={() => setEditingKids(false)}
+        open={editingCarpool}
+        onClose={() => setEditingCarpool(false)}
         title="Edit carpool"
         footer={
-          <button type="button" className="pill-button" onClick={saveKids} disabled={saving}>
+          <button type="button" className="pill-button" onClick={saveCarpool} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </button>
         }
@@ -521,6 +813,42 @@ export function CarpoolDetail({
         <div className="form-field">
           <span className="gate-field-label">Carpool name</span>
           <input value={draftName} onChange={(e) => setDraftName(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Day</span>
+          <select value={draftDay} onChange={(e) => setDraftDay(e.target.value as DayOfWeek)}>
+            {DAYS_OF_WEEK.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Street address</span>
+          <input value={draftStreet} onChange={(e) => setDraftStreet(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Zip code</span>
+          <input value={draftZip} onChange={(e) => setDraftZip(e.target.value)} inputMode="numeric" />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Drop-off time</span>
+          <input
+            type="time"
+            value={draftDropOffTime}
+            onChange={(e) => setDraftDropOffTime(e.target.value)}
+            onInvalid={(e) => e.preventDefault()}
+          />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Pick-up time</span>
+          <input
+            type="time"
+            value={draftPickUpTime}
+            onChange={(e) => setDraftPickUpTime(e.target.value)}
+            onInvalid={(e) => e.preventDefault()}
+          />
         </div>
         <KidPicker
           allKids={allKids}

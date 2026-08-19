@@ -848,28 +848,6 @@ button {
   text-align: left;
 }
 
-.mini-form.primary {
-  padding: 28px;
-  border-radius: 24px;
-  animation:
-    float-in 0.7s var(--ease-smooth) both,
-    breathe 6s ease-in-out 0.7s infinite;
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    box-shadow: 0 16px 40px rgba(139, 123, 184, 0.16);
-  }
-  50% {
-    box-shadow: 0 20px 48px rgba(139, 123, 184, 0.26);
-  }
-}
-
-.mini-form.primary h3 {
-  font-size: 19px;
-}
-
 .mini-form h3 {
   font-size: 17px;
   margin: 0;
@@ -896,16 +874,6 @@ button {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
-}
-
-.mini-form-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.mini-form-header h3 {
-  margin: 0;
 }
 
 .close-x {
@@ -1185,6 +1153,41 @@ button {
   }
 }
 
+/* Solo-member carpools swap the driving-legs section in the main column for
+   a prominent invite instead — there's nobody to coordinate with yet. */
+.solo-invite-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.solo-invite-panel .invite-box-main {
+  margin-top: 20px;
+  align-items: center;
+  align-self: stretch;
+}
+
+@media (min-width: 900px) {
+  .solo-invite-panel .invite-box-main {
+    flex: none;
+    align-self: center;
+    padding: 32px;
+    gap: 10px;
+    border-radius: 24px;
+  }
+
+  .solo-invite-panel .invite-box-main .invite-code {
+    font-size: 40px;
+  }
+
+  .solo-invite-panel .invite-box-main .pill-button {
+    padding: 14px 22px;
+    font-size: 15px;
+  }
+}
+
 @keyframes breathe-invite {
   0%,
   100% {
@@ -1309,12 +1312,14 @@ button {
   color: var(--text-h);
 }
 
-.carpool-detail-main > h3.bliss-heading {
+.carpool-detail-main > h3.bliss-heading,
+.carpool-detail-main > .solo-invite-panel {
   margin-top: 27px;
 }
 
 @media (min-width: 900px) {
-  .carpool-detail-main > h3.bliss-heading {
+  .carpool-detail-main > h3.bliss-heading,
+  .carpool-detail-main > .solo-invite-panel {
     /* Lines up with the sidebar's title, which sits below the back-link row. */
     margin-top: calc(1.5em + 18px);
   }
@@ -1442,37 +1447,192 @@ button {
   vertical-align: middle;
 }
 
-.move-kid-control {
-  position: relative;
-}
-
-.move-kid-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.move-kid-dialog {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+.ai-summary {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 12px;
-  min-width: 240px;
-  max-width: calc(100vw - 32px);
-  padding: 18px;
-  border-radius: 18px;
-  border: 1px solid var(--glass-border);
-  background: var(--card-bg);
-  box-shadow: 0 16px 36px rgba(139, 123, 184, 0.22);
+  margin: 0 0 22px;
+  text-align: left;
 }
 
-.move-kid-dialog .pill-button {
+.carpool-detail-main > .ai-summary:first-child {
+  margin-top: 27px;
+}
+
+@media (min-width: 900px) {
+  .carpool-detail-main > .ai-summary:first-child {
+    margin-top: calc(1.5em + 18px);
+  }
+}
+
+.ai-summary-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    100deg,
+    rgba(139, 123, 184, 0.18),
+    rgba(201, 143, 166, 0.18),
+    rgba(130, 168, 148, 0.18)
+  );
+  box-shadow: 0 0 0 1px rgba(139, 123, 184, 0.28) inset;
+}
+
+.ai-summary-sparkle {
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px rgba(201, 143, 166, 0.7));
+  animation: ai-sparkle-twinkle 2.4s ease-in-out infinite;
+}
+
+@keyframes ai-sparkle-twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+    opacity: 0.7;
+  }
+}
+
+.ai-summary-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(100deg, #8b7bb8, #c98fa6, #82a894, #8b7bb8);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-drift 14s ease-in-out infinite;
+}
+
+.ai-summary-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #82a894;
+  animation: ai-pulse 1.8s ease-out infinite;
+}
+
+@keyframes ai-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(130, 168, 148, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(130, 168, 148, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(130, 168, 148, 0);
+  }
+}
+
+.ai-summary-quote {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 21px;
+  line-height: 1.4;
+  color: var(--text-h);
+  /* The drop-off and pick-up sentences are joined with "\n" so they always
+     land on their own line instead of running together. */
+  white-space: pre-line;
+  /* Reserves room for the longest realistic message (3 lines on this narrow
+     a column) so the typewriter filling in doesn't reflow anything below it. */
+  min-height: 4.2em;
+}
+
+@media (min-width: 900px) {
+  .ai-summary-quote {
+    font-size: 25px;
+    /* Wider column here fits the same message in 2 lines. */
+    min-height: 2.8em;
+  }
+}
+
+.ai-summary-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 0.85em;
+  margin-left: 4px;
+  vertical-align: -0.1em;
+  background: var(--accent);
+  animation: ai-cursor-blink 1s step-end infinite;
+}
+
+/* While actively "typing" the cursor stays solid, like a caret keeping pace
+   with the text — it only starts blinking once the message is fully out. */
+.ai-summary-cursor.typing {
+  animation: none;
+  opacity: 1;
+}
+
+@keyframes ai-cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.leg-toggle-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background:
+    linear-gradient(var(--glass-bg-strong), var(--glass-bg-strong)) padding-box,
+    linear-gradient(100deg, #8b7bb8, #c98fa6, #82a894) border-box;
+  border: 1px solid transparent;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.ai-prompt-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-h);
+}
+
+.ai-prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Multi-kid move picker, shown inline under a driving row instead of the
+   single-button case — needs its own line for chips plus a seat-limit note. */
+.move-kid-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.move-kid-picker .pill-button {
   align-self: flex-end;
+}
+
+.move-kid-picker.closing {
+  animation: move-here-pop-out 0.2s var(--ease-smooth) both;
 }
 
 .driving-row-list {
@@ -1540,9 +1700,68 @@ button {
   font-weight: 600;
 }
 
+.driving-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .move-here-button {
-  width: 100%;
+  white-space: nowrap;
   animation: pop-in 0.25s var(--ease-bounce) both;
+}
+
+/* On desktop the button has room to arrive as its own little event: it
+   slides in from the row's right edge, which is also why it has to sit
+   after seat-status in markup — that's what makes seat-status visibly get
+   nudged out of the way instead of already being wherever the button lands. */
+.move-here-button.closing {
+  animation: move-here-pop-out 0.2s var(--ease-smooth) both;
+}
+
+@keyframes move-here-pop-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@media (min-width: 900px) {
+  .move-here-button {
+    animation: move-here-slide-in 0.4s var(--ease-bounce) both;
+  }
+
+  .move-here-button.closing {
+    animation: move-here-slide-out 0.3s var(--ease-smooth) both;
+  }
+}
+
+@keyframes move-here-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes move-here-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(28px);
+  }
 }
 
 .seat-status {

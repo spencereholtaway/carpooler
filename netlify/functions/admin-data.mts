@@ -32,11 +32,24 @@ async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId
 }
 
 function dropMember(carpool: Carpool, memberId: string) {
+  const leaving = carpool.members.find((m) => m.id === memberId);
   carpool.members = carpool.members.filter((m) => m.id !== memberId);
   carpool.dropOff ??= { time: "", cars: [] };
   carpool.pickUp ??= { time: "", cars: [] };
   carpool.dropOff.cars = (carpool.dropOff.cars ?? []).filter((c) => c.driverId !== memberId);
   carpool.pickUp.cars = (carpool.pickUp.cars ?? []).filter((c) => c.driverId !== memberId);
+
+  // Their kid(s) may still be sitting in someone else's car from an earlier
+  // move — unless a co-parent still legitimately claims them, that ride is
+  // no longer valid for anyone now that this member is gone.
+  const stillOwned = new Set(carpool.members.flatMap((m) => m.kids));
+  const kidsToClear = (leaving?.kids ?? []).filter((k) => !stillOwned.has(k));
+  if (kidsToClear.length > 0) {
+    const removeSet = new Set(kidsToClear);
+    for (const leg of [carpool.dropOff, carpool.pickUp]) {
+      leg.cars = leg.cars.map((c) => ({ ...c, kids: c.kids.filter((k) => !removeSet.has(k)) }));
+    }
+  }
 }
 
 async function handleMutation(store: ReturnType<typeof getStore>, req: Request) {
