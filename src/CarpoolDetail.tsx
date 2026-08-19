@@ -503,10 +503,14 @@ export function CarpoolDetail({
             </button>
           )}
         </div>
-        {self && allKids.length > 0 && (
-          <p className="muted carpool-kids-line">
-            {(self.kids ?? []).length > 0 ? self.kids.join(", ") : "No kids assigned yet"}
-          </p>
+        {self && youSummary && (
+          <span className="ai-summary-badge">
+            <span className="ai-summary-sparkle" aria-hidden="true">
+              ✨
+            </span>
+            <span className="ai-summary-name">blisspoolAI</span>
+            <span className="ai-summary-live" aria-hidden="true" />
+          </span>
         )}
 
         <div className="schedule-summary">
@@ -594,13 +598,6 @@ export function CarpoolDetail({
           <>
             {self && youSummary ? (
               <div className="ai-summary">
-                <span className="ai-summary-badge">
-                  <span className="ai-summary-sparkle" aria-hidden="true">
-                    ✨
-                  </span>
-                  <span className="ai-summary-name">blisspoolAI</span>
-                  <span className="ai-summary-live" aria-hidden="true" />
-                </span>
                 <p className="ai-summary-quote">
                   {typedSummary}
                   <span
