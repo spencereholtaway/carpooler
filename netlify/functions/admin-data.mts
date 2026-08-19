@@ -161,7 +161,7 @@ export default async (req: Request) => {
   const users = (
     await Promise.all(
       profileBlobs.map(async (b) => {
-        const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
+        const profile = (await store.get(b.key, { type: "json", consistency: "eventual" })) as ServerProfile | null;
         if (!profile) return null;
         return { memberId: b.key.slice("profile:".length), ...profile };
       })
@@ -170,7 +170,7 @@ export default async (req: Request) => {
 
   const { blobs: codeBlobs } = await store.list({ prefix: "code:" });
   const carpools = (
-    await Promise.all(codeBlobs.map((b) => store.get(b.key, { type: "json" })))
+    await Promise.all(codeBlobs.map((b) => store.get(b.key, { type: "json", consistency: "eventual" })))
   ).filter(Boolean) as Carpool[];
 
   return new Response(JSON.stringify({ users, carpools }), {
