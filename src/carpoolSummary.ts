@@ -131,12 +131,18 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   const pickUpSelf = allCarpoolKids.filter((k) => pickUpDrivers.get(k) === memberId);
   const bothWaysKids = bothWaysByDriver.get(memberId) ?? [];
 
+  // Only mention another driver's own "both ways" arrangement when it
+  // involves one of self's kids — other families' pickups aren't self's
+  // business, even when they happen to also be a both-ways drive.
   const otherBothWaysLines = [...bothWaysByDriver.entries()]
     .filter(([driverId]) => driverId !== memberId)
     .map(([driverId, kids]) => {
+      const relevantKids = kids.filter((k) => self.kids.includes(k));
+      if (relevantKids.length === 0) return null;
       const name = carpool.members.find((m) => m.id === driverId)?.name ?? "Someone";
-      return `${name} is driving ${joinList(kids)} both ways.`;
-    });
+      return `${name} is driving ${joinList(relevantKids)} both ways.`;
+    })
+    .filter((line): line is string => line !== null);
 
   return [
     bothWaysKids.length > 0 ? `You're driving ${joinList(bothWaysKids)} both ways.` : "",
