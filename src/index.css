@@ -1692,16 +1692,11 @@ button {
   /* The drop-off and pick-up sentences are joined with "\n" so they always
      land on their own line instead of running together. */
   white-space: pre-line;
-  /* Reserves room for the longest realistic message (3 lines on this narrow
-     a column) so the typewriter filling in doesn't reflow anything below it. */
-  min-height: 4.2em;
 }
 
 @media (min-width: 900px) {
   .ai-summary-quote {
     font-size: 25px;
-    /* Wider column here fits the same message in 2 lines. */
-    min-height: 2.8em;
   }
 }
 

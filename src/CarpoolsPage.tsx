@@ -24,25 +24,36 @@ function TodayCarpoolRow({
   onDone: () => void;
   showCursor: boolean;
 }) {
-  const { display, done } = useTypewriter(summary, 30, start);
+  const time = rowTimeRange(carpool);
+  const full = `${carpool.name}\n${time}\n${summary}`;
+  const { display, done } = useTypewriter(full, 30, start);
   useEffect(() => {
     if (done) onDone();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
-  const lines = display.split("\n");
+  const [name, timeLine, ...summaryLines] = display.split("\n");
+  const lastLineIndex = 2 + Math.max(summaryLines.length - 1, 0);
+  const cursor = (atIndex: number) =>
+    showCursor && atIndex === lastLineIndex ? (
+      <span className={`ai-summary-cursor ${done ? "" : "typing"}`} aria-hidden="true" />
+    ) : null;
   return (
     <button className="today-carpool" onClick={onOpen}>
       <div className="today-carpool-header">
-        <span className="today-carpool-name">{carpool.name}</span>
-        <span className="today-carpool-time">{rowTimeRange(carpool)}</span>
+        <span className="today-carpool-name">
+          {name}
+          {cursor(0)}
+        </span>
+        <span className="today-carpool-time">
+          {timeLine}
+          {cursor(1)}
+        </span>
       </div>
       <div className="today-carpool-summary">
-        {lines.map((line, i) => (
+        {summaryLines.map((line, i) => (
           <p key={i}>
             {line}
-            {showCursor && i === lines.length - 1 && (
-              <span className={`ai-summary-cursor ${done ? "" : "typing"}`} aria-hidden="true" />
-            )}
+            {cursor(2 + i)}
           </p>
         ))}
       </div>
