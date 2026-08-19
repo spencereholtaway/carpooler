@@ -347,6 +347,48 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         headers: { "Content-Type": "application/json" },
       });
     }
+    // Every carpool keeps its own denormalized copy of a member's shared
+    // profile fields (name/seats/street/zip), synced only when that member
+    // next hits "Save changes" in ProfileEditor — so a carpool a save's fetch
+    // missed (or a save from before that sync existed) can drift stale
+    // indefinitely. This re-pushes current profile values to every carpool
+    // for every member, matching exactly what ProfileEditor's own sync does:
+    // name/seats/street/zip only, never touching a carpool's own kids subset
+    // (that's per-carpool, not a copy of the household's full kid list).
+    case "resyncProfileFields": {
+      const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
+      let carpoolsUpdated = 0;
+      for (const b of profileBlobs) {
+        const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
+        if (!profile) continue;
+        const memberId = b.key.slice("profile:".length);
+
+        const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+        for (const code of codes) {
+          const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+          const m = carpool?.members.find((mm) => mm.id === memberId);
+          if (!carpool || !m) continue;
+          if (
+            m.name === profile.name &&
+            m.seats === profile.seats &&
+            m.street === profile.street &&
+            m.zip === profile.zip
+          ) {
+            continue;
+          }
+          m.name = profile.name;
+          m.seats = profile.seats;
+          m.street = profile.street;
+          m.zip = profile.zip;
+          await store.setJSON(`code:${code}`, carpool);
+          carpoolsUpdated++;
+        }
+      }
+
+      return new Response(JSON.stringify({ carpoolsUpdated }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     default:
       return new Response("Unknown action", { status: 400 });
   }
