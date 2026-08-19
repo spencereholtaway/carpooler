@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { joinCarpool, updateCarpoolSchedule } from "./api";
+import { useEffect, useState, type ReactNode } from "react";
+import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
 import { KidPicker } from "./KidPicker";
 import { mapsLink } from "./maps";
 import type { Car, Carpool, Member } from "./types";
@@ -10,6 +10,20 @@ function formatTime(time: string) {
   const period = h >= 12 ? "PM" : "AM";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+// When the same kid is listed on more than one member (shared between linked
+// coparents), only the member who joined this carpool first — i.e. appears
+// earliest in `members` — gets them by default. Everyone else starts at
+// "Nobody" until the kid is explicitly moved to them.
+function computeKidDefaults(members: Member[]): Map<string, string> {
+  const defaults = new Map<string, string>();
+  for (const m of members) {
+    for (const k of m.kids) {
+      if (!defaults.has(k)) defaults.set(k, m.id);
+    }
+  }
+  return defaults;
 }
 
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
@@ -104,6 +118,9 @@ function DrivingLeg({
   eligibleFor,
   movingKid,
   onCarsChange,
+  kidDefaults,
+  coParentId,
+  householdCombined,
 }: {
   label: string;
   time: string;
@@ -113,18 +130,23 @@ function DrivingLeg({
   eligibleFor: (m: Member) => boolean;
   movingKid: string | null;
   onCarsChange: (cars: Car[]) => void;
+  kidDefaults: Map<string, string>;
+  coParentId: string | null;
+  householdCombined: boolean;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const myKids = new Set(members.find((m) => m.id === memberId)?.kids ?? []);
 
   // Not driving a leg doesn't mean your kid has no ride — it defaults to
-  // riding with you, unless someone has explicitly moved them into another
-  // active car for that leg.
+  // riding with whichever parent owns it by default, unless someone has
+  // explicitly moved them into another active car for that leg.
   const assignedElsewhere = new Set(cars.flatMap((c) => c.kids));
 
   const rowData = members.map((m) => {
     const car = cars.find((c) => c.driverId === m.id);
-    const kids = car ? car.kids : m.kids.filter((k) => !assignedElsewhere.has(k));
+    const kids = car
+      ? car.kids
+      : m.kids.filter((k) => !assignedElsewhere.has(k) && kidDefaults.get(k) === m.id);
     const eligible = eligibleFor(m);
     // A member's seat count is already "free seats for other people's kids" —
     // their own kid(s) riding along don't eat into it.
@@ -160,6 +182,9 @@ function DrivingLeg({
               <div className="driving-row-top">
                 <div className="driving-row-main">
                   <strong>{isSelf ? "You" : m.name}</strong>
+                  {!isSelf && householdCombined && coParentId === m.id && (
+                    <span className="muted"> · same household</span>
+                  )}
                   <div className="driving-row-kids">
                     {kids.length === 0 && <span className="muted">Nobody</span>}
                     {kids
@@ -223,6 +248,15 @@ export function CarpoolDetail({
   const self = carpool.members.find((m) => m.id === memberId);
   const [draftKids, setDraftKids] = useState<string[]>(self?.kids ?? []);
   const [draftName, setDraftName] = useState(carpool.name);
+  const [household, setHousehold] = useState<{ coParentId: string | null; combined: boolean } | null>(
+    null
+  );
+
+  useEffect(() => {
+    getHousehold(memberId).then(setHousehold);
+  }, [memberId]);
+
+  const kidDefaults = computeKidDefaults(carpool.members);
 
   const openKidsEditor = () => {
     setDraftKids(self?.kids ?? []);
@@ -425,6 +459,9 @@ export function CarpoolDetail({
         eligibleFor={(m) => m.canDriveDropOff}
         movingKid={effectiveMovingKid}
         onCarsChange={(cars) => updateLegCars("dropOff", cars)}
+        kidDefaults={kidDefaults}
+        coParentId={household?.coParentId ?? null}
+        householdCombined={household?.combined ?? false}
       />
       <DrivingLeg
         key={`pickUp-${effectiveMovingKid ?? "none"}`}
@@ -436,6 +473,9 @@ export function CarpoolDetail({
         eligibleFor={(m) => m.canDrivePickUp}
         movingKid={effectiveMovingKid}
         onCarsChange={(cars) => updateLegCars("pickUp", cars)}
+        kidDefaults={kidDefaults}
+        coParentId={household?.coParentId ?? null}
+        householdCombined={household?.combined ?? false}
       />
 
       <div className="invite-box">

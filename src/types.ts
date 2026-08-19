@@ -7,6 +7,7 @@ export type Member = {
   canDrivePickUp: boolean;
   street: string;
   zip: string;
+  coparentId?: string | null;
 };
 
 export type Car = {

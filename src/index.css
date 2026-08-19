@@ -947,6 +947,15 @@ button {
   }
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 .invite-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -1452,6 +1461,7 @@ button {
   border-bottom: 1px solid #f0f1f3;
   color: #111827;
   white-space: nowrap;
+  vertical-align: top;
 }
 
 .admin-table tr:last-child td {
@@ -1462,6 +1472,18 @@ button {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   color: #6b7280;
+}
+
+.admin-copy-code {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.admin-copy-code:hover {
+  color: #374151;
+  text-decoration: underline;
 }
 
 .admin-add-row {
@@ -1496,4 +1518,110 @@ button {
   font-size: 14px;
   line-height: 1;
   padding: 0 2px;
+}
+
+.admin-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-add-member-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.admin-add-member-row select {
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 20, 0.35);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 100;
+}
+
+.admin-panel {
+  width: 380px;
+  max-width: 100%;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
+  animation: admin-panel-in 0.18s ease-out;
+}
+
+@keyframes admin-panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-panel-header h3 {
+  margin: 0;
+}
+
+.admin-panel-close {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0 4px;
+}
+
+.admin-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.admin-panel-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.admin-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-panel-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.admin-panel-members {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 14px;
+}
+
+.admin-panel-members h4 {
+  margin: 0 0 8px;
 }

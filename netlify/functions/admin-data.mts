@@ -93,6 +93,32 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await store.delete(`code:${code}`);
       return new Response("ok");
     }
+    case "addMember": {
+      const { code, memberId } = body.payload;
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      if (carpool.members.some((m) => m.id === memberId)) return new Response("ok");
+
+      const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
+      if (!profile) return new Response("User not found", { status: 404 });
+
+      carpool.members.push({
+        id: memberId,
+        name: profile.name,
+        seats: profile.seats,
+        kids: profile.kids,
+        canDriveDropOff: false,
+        canDrivePickUp: false,
+        street: profile.street,
+        zip: profile.zip,
+      });
+      await store.setJSON(`code:${code}`, carpool);
+
+      const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+      if (!codes.includes(code)) await store.setJSON(`member:${memberId}`, [...codes, code]);
+
+      return new Response("ok");
+    }
     case "removeMember": {
       const { code, memberId } = body.payload;
       const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;

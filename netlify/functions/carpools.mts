@@ -10,6 +10,7 @@ type Member = {
   canDrivePickUp: boolean;
   street: string;
   zip: string;
+  coparentId?: string | null;
 };
 type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 type Car = { driverId: string; kids: string[] };
@@ -57,6 +58,7 @@ async function autoAddCoParent(
     canDrivePickUp: false,
     street: coProfile.street,
     zip: coProfile.zip,
+    coparentId: actingMemberId,
   });
 
   const existing = ((await store.get(`member:${coParentId}`, { type: "json" })) as string[] | null) ?? [];
@@ -99,6 +101,8 @@ export default async (req: Request) => {
     for (let i = 0; i < 10 && (await store.get(`code:${code}`)); i++) {
       code = randomCode();
     }
+
+    member.coparentId = (await store.get(`coparent:${member.id}`)) as string | null;
 
     const carpool: Carpool = {
       code,

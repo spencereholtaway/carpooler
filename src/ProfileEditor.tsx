@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { claimName, getHousehold, joinCarpool, listCarpools } from "./api";
+import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined } from "./api";
 import type { LocalProfile } from "./useProfile";
 
 export function ProfileEditor({
@@ -26,8 +26,10 @@ export function ProfileEditor({
     code: string;
     coParentId: string | null;
     coParentName: string | null;
+    combined: boolean;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savingCombined, setSavingCombined] = useState(false);
 
   useEffect(() => {
     getHousehold(memberId).then(setHousehold);
@@ -38,6 +40,17 @@ export function ProfileEditor({
     await navigator.clipboard.writeText(`${window.location.origin}?coparent=${household.code}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const toggleCombined = async () => {
+    if (!household) return;
+    setSavingCombined(true);
+    try {
+      const { combined } = await setHouseholdCombined(memberId, !household.combined);
+      setHousehold((h) => (h ? { ...h, combined } : h));
+    } finally {
+      setSavingCombined(false);
+    }
   };
 
   const addKid = () => {
@@ -133,6 +146,19 @@ export function ProfileEditor({
               <p className="muted">
                 When either of you joins or starts a carpool for a shared kid, the other is added
                 automatically (driving stays a separate choice for each of you).
+              </p>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={household.combined}
+                  disabled={savingCombined}
+                  onChange={toggleCombined}
+                />
+                We share driving as one household
+              </label>
+              <p className="muted">
+                Marks you as a combined household in shared carpools, instead of treating each of
+                you as a separate default driver.
               </p>
             </>
           ) : (

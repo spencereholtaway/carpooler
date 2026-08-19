@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 const KEY_STORAGE = "blisspool:admin-key";
 
@@ -29,6 +29,51 @@ type AdminCarpool = {
   members: AdminMember[];
   createdAt: number;
 };
+
+function CopyableCode({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button type="button" className="admin-mono admin-copy-code" onClick={copy} title="Click to copy">
+      {copied ? "Copied!" : value}
+    </button>
+  );
+}
+
+function SidePanel({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="admin-panel-backdrop" onClick={onClose}>
+      <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="admin-panel-header">
+          <h3>{title}</h3>
+          <button type="button" className="admin-panel-close" onClick={onClose} aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <div className="admin-panel-body">{children}</div>
+        {footer && <div className="admin-panel-footer">{footer}</div>}
+      </div>
+    </div>
+  );
+}
 
 export function AdminPage() {
   useEffect(() => {
@@ -109,21 +154,27 @@ export function AdminPage() {
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [userDraft, setUserDraft] = useState<AdminUser | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
   const startEditUser = (u: AdminUser) => {
     setEditingUser(u.memberId);
     setUserDraft({ ...u });
   };
   const saveUser = async () => {
     if (!userDraft) return;
-    await callAdmin("updateUser", {
-      memberId: userDraft.memberId,
-      name: userDraft.name,
-      seats: Number(userDraft.seats) || 0,
-      kids: userDraft.kids,
-      street: userDraft.street,
-      zip: userDraft.zip,
-    });
-    setEditingUser(null);
+    setSavingUser(true);
+    try {
+      await callAdmin("updateUser", {
+        memberId: userDraft.memberId,
+        name: userDraft.name,
+        seats: Number(userDraft.seats) || 0,
+        kids: userDraft.kids,
+        street: userDraft.street,
+        zip: userDraft.zip,
+      });
+      setEditingUser(null);
+    } finally {
+      setSavingUser(false);
+    }
   };
   const deleteUser = async (memberId: string) => {
     if (!confirm("Delete this user? This removes them from any carpools too.")) return;
@@ -132,28 +183,53 @@ export function AdminPage() {
 
   const [editingCarpool, setEditingCarpool] = useState<string | null>(null);
   const [carpoolDraft, setCarpoolDraft] = useState<AdminCarpool | null>(null);
+  const [savingCarpool, setSavingCarpool] = useState(false);
   const startEditCarpool = (c: AdminCarpool) => {
     setEditingCarpool(c.code);
     setCarpoolDraft({ ...c, destination: { ...(c.destination ?? { street: "", zip: "" }) } });
+    setAddMemberSelection("");
   };
   const saveCarpool = async () => {
     if (!carpoolDraft) return;
-    await callAdmin("updateCarpool", {
-      code: carpoolDraft.code,
-      name: carpoolDraft.name,
-      day: carpoolDraft.day,
-      destination: carpoolDraft.destination,
-    });
-    setEditingCarpool(null);
+    setSavingCarpool(true);
+    try {
+      await callAdmin("updateCarpool", {
+        code: carpoolDraft.code,
+        name: carpoolDraft.name,
+        day: carpoolDraft.day,
+        destination: carpoolDraft.destination,
+      });
+      setEditingCarpool(null);
+    } finally {
+      setSavingCarpool(false);
+    }
   };
   const deleteCarpool = async (code: string) => {
     if (!confirm("Delete this carpool entirely?")) return;
     await callAdmin("deleteCarpool", { code });
+    setEditingCarpool(null);
   };
   const removeMember = async (code: string, memberId: string) => {
     if (!confirm("Remove this member from the carpool?")) return;
     await callAdmin("removeMember", { code, memberId });
   };
+
+  const [addMemberSelection, setAddMemberSelection] = useState("");
+  const [addingMember, setAddingMember] = useState(false);
+  const addMember = async (code: string) => {
+    if (!addMemberSelection) return;
+    setAddingMember(true);
+    try {
+      await callAdmin("addMember", { code, memberId: addMemberSelection });
+      setAddMemberSelection("");
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  // The panel's carpool data needs to reflect the latest load (e.g. after
+  // adding/removing a member), not the stale snapshot captured when it opened.
+  const liveEditingCarpool = editingCarpool ? carpools.find((c) => c.code === editingCarpool) : null;
 
   if (!key) {
     return (
@@ -243,66 +319,20 @@ export function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) =>
-                  editingUser === u.memberId && userDraft ? (
-                    <tr key={u.memberId}>
-                      <td>
-                        <input
-                          value={userDraft.name}
-                          onChange={(e) => setUserDraft({ ...userDraft, name: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={userDraft.kids.join(", ")}
-                          onChange={(e) =>
-                            setUserDraft({
-                              ...userDraft,
-                              kids: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
-                            })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          value={userDraft.seats}
-                          onChange={(e) => setUserDraft({ ...userDraft, seats: Number(e.target.value) })}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={userDraft.street}
-                          onChange={(e) => setUserDraft({ ...userDraft, street: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={userDraft.zip}
-                          onChange={(e) => setUserDraft({ ...userDraft, zip: e.target.value })}
-                        />
-                      </td>
-                      <td className="admin-mono">{u.memberId}</td>
-                      <td>
-                        <button onClick={saveUser}>Save</button>{" "}
-                        <button onClick={() => setEditingUser(null)}>Cancel</button>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={u.memberId}>
-                      <td>{u.name}</td>
-                      <td>{u.kids?.join(", ") || "—"}</td>
-                      <td>{u.seats}</td>
-                      <td>{u.street || "—"}</td>
-                      <td>{u.zip || "—"}</td>
-                      <td className="admin-mono">{u.memberId}</td>
-                      <td>
-                        <button onClick={() => startEditUser(u)}>Edit</button>{" "}
-                        <button onClick={() => deleteUser(u.memberId)}>Delete</button>
-                      </td>
-                    </tr>
-                  )
-                )}
+                {users.map((u) => (
+                  <tr key={u.memberId}>
+                    <td>{u.name}</td>
+                    <td>{u.kids?.join(", ") || "—"}</td>
+                    <td>{u.seats}</td>
+                    <td>{u.street || "—"}</td>
+                    <td>{u.zip || "—"}</td>
+                    <td className="admin-mono">{u.memberId}</td>
+                    <td>
+                      <button onClick={() => startEditUser(u)}>Edit</button>{" "}
+                      <button onClick={() => deleteUser(u.memberId)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -324,91 +354,196 @@ export function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {carpools.map((c) =>
-                  editingCarpool === c.code && carpoolDraft ? (
-                    <tr key={c.code}>
-                      <td>
-                        <input
-                          value={carpoolDraft.name}
-                          onChange={(e) => setCarpoolDraft({ ...carpoolDraft, name: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={carpoolDraft.day}
-                          onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          placeholder="Street"
-                          value={carpoolDraft.destination?.street ?? ""}
-                          onChange={(e) =>
-                            setCarpoolDraft({
-                              ...carpoolDraft,
-                              destination: { street: e.target.value, zip: carpoolDraft.destination?.zip ?? "" },
-                            })
-                          }
-                        />
-                        <input
-                          placeholder="Zip"
-                          value={carpoolDraft.destination?.zip ?? ""}
-                          onChange={(e) =>
-                            setCarpoolDraft({
-                              ...carpoolDraft,
-                              destination: { street: carpoolDraft.destination?.street ?? "", zip: e.target.value },
-                            })
-                          }
-                        />
-                      </td>
-                      <td>{c.dropOff?.time || "—"}</td>
-                      <td>{c.pickUp?.time || "—"}</td>
-                      <td>{c.members.map((m) => m.name).join(", ")}</td>
-                      <td className="admin-mono">{c.code}</td>
-                      <td>
-                        <button onClick={saveCarpool}>Save</button>{" "}
-                        <button onClick={() => setEditingCarpool(null)}>Cancel</button>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={c.code}>
-                      <td>{c.name}</td>
-                      <td>{c.day ?? "—"}</td>
-                      <td>
-                        {c.destination?.street
-                          ? `${c.destination.street}, ${c.destination.zip}`
-                          : "—"}
-                      </td>
-                      <td>{c.dropOff?.time || "—"}</td>
-                      <td>{c.pickUp?.time || "—"}</td>
-                      <td>
-                        {c.members.map((m) => (
-                          <span key={m.id} className="admin-member-chip">
-                            {m.name}{" "}
-                            <button
-                              className="admin-chip-remove"
-                              title="Remove from carpool"
-                              onClick={() => removeMember(c.code, m.id)}
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </td>
-                      <td className="admin-mono">{c.code}</td>
-                      <td>
-                        <button onClick={() => startEditCarpool(c)}>Edit</button>{" "}
-                        <button onClick={() => deleteCarpool(c.code)}>Delete</button>
-                      </td>
-                    </tr>
-                  )
-                )}
+                {carpools.map((c) => (
+                  <tr key={c.code}>
+                    <td>{c.name}</td>
+                    <td>{c.day ?? "—"}</td>
+                    <td>
+                      {c.destination?.street ? `${c.destination.street}, ${c.destination.zip}` : "—"}
+                    </td>
+                    <td>{c.dropOff?.time || "—"}</td>
+                    <td>{c.pickUp?.time || "—"}</td>
+                    <td>
+                      {c.members.length > 0 ? (
+                        <div className="admin-member-list">
+                          {c.members.map((m) => (
+                            <div key={m.id}>{m.name}</div>
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      <CopyableCode value={c.code} />
+                    </td>
+                    <td>
+                      <button onClick={() => startEditCarpool(c)}>Edit</button>{" "}
+                      <button onClick={() => deleteCarpool(c.code)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
         </div>
       </main>
+
+      <SidePanel
+        open={editingUser !== null}
+        onClose={() => setEditingUser(null)}
+        title="Edit user"
+        footer={
+          <>
+            <button onClick={saveUser} disabled={savingUser}>
+              {savingUser ? "Saving..." : "Save"}
+            </button>{" "}
+            <button onClick={() => setEditingUser(null)}>Cancel</button>
+          </>
+        }
+      >
+        {userDraft && (
+          <div className="admin-panel-form">
+            <label>
+              Name
+              <input
+                value={userDraft.name}
+                onChange={(e) => setUserDraft({ ...userDraft, name: e.target.value })}
+              />
+            </label>
+            <label>
+              Kids (comma separated)
+              <input
+                value={userDraft.kids.join(", ")}
+                onChange={(e) =>
+                  setUserDraft({
+                    ...userDraft,
+                    kids: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Seats
+              <input
+                type="number"
+                value={userDraft.seats}
+                onChange={(e) => setUserDraft({ ...userDraft, seats: Number(e.target.value) })}
+              />
+            </label>
+            <label>
+              Street
+              <input
+                value={userDraft.street}
+                onChange={(e) => setUserDraft({ ...userDraft, street: e.target.value })}
+              />
+            </label>
+            <label>
+              Zip
+              <input
+                value={userDraft.zip}
+                onChange={(e) => setUserDraft({ ...userDraft, zip: e.target.value })}
+              />
+            </label>
+            <p className="admin-mono">{userDraft.memberId}</p>
+          </div>
+        )}
+      </SidePanel>
+
+      <SidePanel
+        open={editingCarpool !== null}
+        onClose={() => setEditingCarpool(null)}
+        title="Edit carpool"
+        footer={
+          <>
+            <button onClick={saveCarpool} disabled={savingCarpool}>
+              {savingCarpool ? "Saving..." : "Save"}
+            </button>{" "}
+            <button onClick={() => setEditingCarpool(null)}>Cancel</button>
+          </>
+        }
+      >
+        {carpoolDraft && liveEditingCarpool && (
+          <div className="admin-panel-form">
+            <label>
+              Name
+              <input
+                value={carpoolDraft.name}
+                onChange={(e) => setCarpoolDraft({ ...carpoolDraft, name: e.target.value })}
+              />
+            </label>
+            <label>
+              Day
+              <input
+                value={carpoolDraft.day}
+                onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
+              />
+            </label>
+            <label>
+              Destination street
+              <input
+                value={carpoolDraft.destination?.street ?? ""}
+                onChange={(e) =>
+                  setCarpoolDraft({
+                    ...carpoolDraft,
+                    destination: { street: e.target.value, zip: carpoolDraft.destination?.zip ?? "" },
+                  })
+                }
+              />
+            </label>
+            <label>
+              Destination zip
+              <input
+                value={carpoolDraft.destination?.zip ?? ""}
+                onChange={(e) =>
+                  setCarpoolDraft({
+                    ...carpoolDraft,
+                    destination: { street: carpoolDraft.destination?.street ?? "", zip: e.target.value },
+                  })
+                }
+              />
+            </label>
+            <p>
+              <CopyableCode value={carpoolDraft.code} />
+            </p>
+
+            <div className="admin-panel-members">
+              <h4>Members</h4>
+              {liveEditingCarpool.members.map((m) => (
+                <span key={m.id} className="admin-member-chip">
+                  {m.name}{" "}
+                  <button
+                    className="admin-chip-remove"
+                    title="Remove from carpool"
+                    onClick={() => removeMember(liveEditingCarpool.code, m.id)}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+              <div className="admin-add-member-row">
+                <select value={addMemberSelection} onChange={(e) => setAddMemberSelection(e.target.value)}>
+                  <option value="">Add user...</option>
+                  {users
+                    .filter((u) => !liveEditingCarpool.members.some((m) => m.id === u.memberId))
+                    .map((u) => (
+                      <option key={u.memberId} value={u.memberId}>
+                        {u.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={() => addMember(liveEditingCarpool.code)}
+                  disabled={!addMemberSelection || addingMember}
+                >
+                  {addingMember ? "Adding..." : "Add"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }

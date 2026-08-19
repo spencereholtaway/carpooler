@@ -10,6 +10,7 @@ type Member = {
   canDrivePickUp: boolean;
   street: string;
   zip: string;
+  coparentId?: string | null;
 };
 type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 type Car = { driverId: string; kids: string[] };
@@ -51,6 +52,7 @@ async function autoAddCoParent(
     canDrivePickUp: false,
     street: coProfile.street,
     zip: coProfile.zip,
+    coparentId: actingMemberId,
   });
 
   const existing = ((await store.get(`member:${coParentId}`, { type: "json" })) as string[] | null) ?? [];
@@ -84,6 +86,10 @@ export default async (req: Request) => {
   const store = getStore("carpools");
   const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
   if (!carpool) return new Response("No carpool with that code", { status: 404 });
+
+  // The client can't be trusted to know its own household link (it may be
+  // stale or forged), so look it up server-side rather than trust the body.
+  member.coparentId = (await store.get(`coparent:${member.id}`)) as string | null;
 
   const existingIndex = carpool.members.findIndex((m) => m.id === member.id);
   const isNewJoin = existingIndex === -1;

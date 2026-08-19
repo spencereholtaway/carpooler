@@ -7,6 +7,10 @@ function randomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function pairKey(a: string, b: string) {
+  return [a, b].sort().join("|");
+}
+
 export default async (req: Request) => {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
@@ -27,12 +31,14 @@ export default async (req: Request) => {
 
   const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
   let coParentName: string | null = null;
+  let combined = false;
   if (coParentId) {
     const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
     coParentName = coProfile?.name ?? null;
+    combined = (await store.get(`combined:${pairKey(memberId, coParentId)}`)) === "true";
   }
 
-  return new Response(JSON.stringify({ code, coParentId, coParentName }), {
+  return new Response(JSON.stringify({ code, coParentId, coParentName, combined }), {
     headers: { "Content-Type": "application/json" },
   });
 };

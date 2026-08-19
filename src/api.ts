@@ -67,8 +67,21 @@ export async function getServerProfile(memberId: string): Promise<Omit<LocalProf
 
 export async function getHousehold(
   memberId: string
-): Promise<{ code: string; coParentId: string | null; coParentName: string | null }> {
+): Promise<{ code: string; coParentId: string | null; coParentName: string | null; combined: boolean }> {
   return unwrap(await fetch(`/api/household?memberId=${encodeURIComponent(memberId)}`));
+}
+
+export async function setHouseholdCombined(
+  memberId: string,
+  combined: boolean
+): Promise<{ combined: boolean }> {
+  return unwrap(
+    await fetch("/api/household/combine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, combined }),
+    })
+  );
 }
 
 export async function linkHousehold(
