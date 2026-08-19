@@ -72,6 +72,21 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const { memberId, name, seats, kids, street, zip } = body.payload;
       const profile: ServerProfile = { name, seats, kids, street, zip };
       await store.setJSON(`profile:${memberId}`, profile);
+
+      const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+      for (const code of codes) {
+        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        if (!carpool) continue;
+        const m = carpool.members.find((mm) => mm.id === memberId);
+        if (!m) continue;
+        m.name = name;
+        m.seats = seats;
+        m.kids = kids;
+        m.street = street;
+        m.zip = zip;
+        await store.setJSON(`code:${code}`, carpool);
+      }
+
       return new Response("ok");
     }
     case "deleteUser": {
