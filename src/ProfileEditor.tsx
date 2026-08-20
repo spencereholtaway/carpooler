@@ -20,7 +20,6 @@ export function ProfileEditor({
   const [name, setName] = useState(profile.name);
   const [street, setStreet] = useState(profile.street);
   const [zip, setZip] = useState(profile.zip);
-  const [seats, setSeats] = useState(profile.seats);
   const [kidInput, setKidInput] = useState("");
   const [kids, setKids] = useState<string[]>(profile.kids);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -118,7 +117,6 @@ export function ProfileEditor({
 
       const updated: LocalProfile = {
         name: trimmedName,
-        seats,
         kids,
         street: street.trim(),
         zip: zip.trim(),
@@ -128,7 +126,8 @@ export function ProfileEditor({
       // kids/driving stay as they were there — only shared profile fields change).
       // Also feed each result back up so an already-open carpool (e.g. the one
       // this edit was opened from) doesn't keep showing pre-edit values like
-      // seats until the user navigates away and back.
+      // name until the user navigates away and back. Per-leg car capacity
+      // lives on the carpool itself now, so it isn't touched here.
       const carpools = await listCarpools(memberId);
       await Promise.all(
         carpools.map(async (c) => {
@@ -137,7 +136,6 @@ export function ProfileEditor({
           const updatedCarpool = await joinCarpool(c.code, {
             ...self,
             name: updated.name,
-            seats: updated.seats,
             street: updated.street,
             zip: updated.zip,
           });
@@ -278,31 +276,6 @@ export function ProfileEditor({
           </div>
         )}
         {kidsError && <p className="form-error">{kidsError}</p>}
-      </div>
-
-      <div className="mini-form">
-        <h4>How many kids can you carry in your car, including your own?</h4>
-        <p className="subtext">
-          We'll work out how many seats that leaves for others based on who's riding with you in
-          a given carpool.
-        </p>
-        <div className="seat-stepper">
-          <button
-            type="button"
-            onClick={() => setSeats((s) => Math.max(0, s - 1))}
-            aria-label="Fewer seats"
-          >
-            &minus;
-          </button>
-          <span className="seat-count">{seats}</span>
-          <button
-            type="button"
-            onClick={() => setSeats((s) => Math.min(8, s + 1))}
-            aria-label="More seats"
-          >
-            +
-          </button>
-        </div>
       </div>
     </BottomSheet>
   );

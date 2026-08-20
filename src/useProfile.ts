@@ -6,7 +6,6 @@ const MEMBER_ID_KEY = "blisspool:member-id";
 
 export type LocalProfile = {
   name: string;
-  seats: number;
   kids: string[];
   street: string;
   zip: string;

@@ -1,8 +1,14 @@
 import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-type Car = { driverId: string; kids: string[] };
+type Car = { driverId: string; kids: string[]; seats: number };
 type Leg = { time: string; cars: Car[] };
+
+function clampSeats(seats: unknown): number {
+  const n = Number(seats);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(8, Math.max(0, Math.round(n)));
+}
 type Address = { street: string; zip: string };
 type Carpool = {
   code: string;
@@ -35,7 +41,7 @@ function sanitizeLeg(
       seenKids.add(k);
       return true;
     });
-    if (isEligible || kids.length > 0) cars.push({ driverId: car.driverId, kids });
+    if (isEligible || kids.length > 0) cars.push({ driverId: car.driverId, kids, seats: clampSeats(car.seats) });
   }
   return { time: leg?.time ?? "", cars };
 }

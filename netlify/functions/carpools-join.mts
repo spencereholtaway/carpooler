@@ -4,7 +4,6 @@ import { getStore } from "@netlify/blobs";
 type Member = {
   id: string;
   name: string;
-  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
@@ -12,8 +11,8 @@ type Member = {
   zip: string;
   coparentId?: string | null;
 };
-type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
-type Car = { driverId: string; kids: string[] };
+type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
+type Car = { driverId: string; kids: string[]; seats: number };
 type Leg = { time: string; cars: Car[] };
 type Carpool = {
   code: string;
@@ -46,7 +45,6 @@ async function autoAddCoParent(
   carpool.members.push({
     id: coParentId,
     name: coProfile.name,
-    seats: coProfile.seats,
     kids: sharedKids,
     canDriveDropOff: false,
     canDrivePickUp: false,
@@ -63,10 +61,14 @@ async function autoAddCoParent(
 
 // Keep a leg's car list in sync with a member's driving toggle: drop their
 // car if they can no longer drive it, or give them one (defaulting to their
-// own unclaimed kids) if they now can and don't have one yet. If they
-// already have a car, also fold in any of their own kids that aren't
-// claimed anywhere yet — e.g. a kid just re-added to this carpool — so a
-// re-added kid defaults back to riding with them instead of no one.
+// own unclaimed kids) if they now can and don't have one yet. There's no
+// profile-level default to seed capacity from — a brand-new car starts at 1
+// seat, same as pressing "+" once from off. If they already have a car, also
+// fold in any of their own kids that aren't claimed anywhere yet — e.g. a
+// kid just re-added to this carpool — so a re-added kid defaults back to
+// riding with them instead of no one. An existing car's seat count is left
+// alone here — that's a per-leg value the driver edits directly, not
+// something a profile sync should clobber.
 function syncCar(leg: Leg, member: Member, canDrive: boolean) {
   leg.cars ??= [];
   if (!canDrive) {
@@ -80,7 +82,7 @@ function syncCar(leg: Leg, member: Member, canDrive: boolean) {
     if (unclaimedOwnKids.length > 0) existing.kids = [...existing.kids, ...unclaimedOwnKids];
     return;
   }
-  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids });
+  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids, seats: 1 });
 }
 
 export default async (req: Request) => {
