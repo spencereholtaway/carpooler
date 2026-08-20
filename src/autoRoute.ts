@@ -10,21 +10,16 @@ export type AutoRouteResult =
   | { ok: true; orderedStops: NamedStop[] }
   | { ok: false; reason: "geolocation-denied" | "geolocation-unavailable" | "geocode-failed" | "too-few-stops" };
 
-// Nominatim's usage policy asks for an identifying app reference on requests
-// from its free public instance. This is a static app label, not user data.
-const NOMINATIM_APP_REF = "carpooler-app";
-
+// Nominatim (the free OSM geocoder used here) doesn't send CORS headers, so
+// the browser can't call it directly — /api/geocode proxies the lookup
+// server-side, where CORS doesn't apply.
 export async function geocodeAddress(street: string, zip: string): Promise<GeoPoint | null> {
-  const query = [street, zip].filter(Boolean).join(", ");
-  if (!query) return null;
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}&email=${NOMINATIM_APP_REF}`;
+  if (!street && !zip) return null;
+  const url = `/api/geocode?street=${encodeURIComponent(street)}&zip=${encodeURIComponent(zip)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
-    const results = (await res.json()) as { lat: string; lon: string }[];
-    const first = results[0];
-    if (!first) return null;
-    return { lat: parseFloat(first.lat), lon: parseFloat(first.lon) };
+    return (await res.json()) as GeoPoint | null;
   } catch {
     return null;
   }
