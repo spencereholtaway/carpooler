@@ -13,6 +13,7 @@ type Carpool = {
   pickUp: Leg;
   members: { id: string; kids: string[]; canDriveDropOff: boolean; canDrivePickUp: boolean }[];
   createdAt: number;
+  timezone: string;
 };
 
 // A member without this leg's "I can drive" toggle set still has a car entry
@@ -42,13 +43,14 @@ function sanitizeLeg(
 export default async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const { code, day, destination, dropOff, pickUp, name } = (await req.json()) as {
+  const { code, day, destination, dropOff, pickUp, name, timezone } = (await req.json()) as {
     code: string;
     day: string;
     destination: Address;
     dropOff: Leg;
     pickUp: Leg;
     name?: string;
+    timezone?: string;
   };
   if (!code || !day) return new Response("Missing fields", { status: 400 });
 
@@ -65,6 +67,7 @@ export default async (req: Request) => {
   const ownKidsByMember = new Map(carpool.members.map((m) => [m.id, new Set(m.kids)]));
 
   if (name && name.trim()) carpool.name = name.trim();
+  if (timezone && timezone.trim()) carpool.timezone = timezone.trim();
   carpool.day = day;
   carpool.destination = { street: destination?.street ?? "", zip: destination?.zip ?? "" };
   carpool.dropOff = sanitizeLeg(dropOff, dropOffEligible, ownKidsByMember);

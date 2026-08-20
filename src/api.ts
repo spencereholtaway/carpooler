@@ -29,13 +29,14 @@ export async function createCarpool(
   destination: Address,
   dropOff: Leg,
   pickUp: Leg,
-  member: Member
+  member: Member,
+  timezone: string
 ): Promise<Carpool> {
   return unwrap(
     await fetch("/api/carpools", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, day, destination, dropOff, pickUp, member }),
+      body: JSON.stringify({ name, day, destination, dropOff, pickUp, member, timezone }),
     })
   );
 }
@@ -103,13 +104,14 @@ export async function updateCarpoolSchedule(
   destination: Address,
   dropOff: Leg,
   pickUp: Leg,
-  name?: string
+  name?: string,
+  timezone?: string
 ): Promise<Carpool> {
   return unwrap(
     await fetch("/api/carpools/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, day, destination, dropOff, pickUp, name }),
+      body: JSON.stringify({ code, day, destination, dropOff, pickUp, name, timezone }),
     })
   );
 }

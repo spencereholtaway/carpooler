@@ -25,7 +25,10 @@ type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
+  timezone: string;
 };
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 function randomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -85,13 +88,14 @@ export default async (req: Request) => {
   }
 
   if (req.method === "POST") {
-    const { name, day, destination, dropOff, pickUp, member } = (await req.json()) as {
+    const { name, day, destination, dropOff, pickUp, member, timezone } = (await req.json()) as {
       name: string;
       day: string;
       destination: Address;
       dropOff: Leg;
       pickUp: Leg;
       member: Member;
+      timezone?: string;
     };
     if (!name || !day || !member?.id || !member?.name) {
       return new Response("Missing fields", { status: 400 });
@@ -113,6 +117,7 @@ export default async (req: Request) => {
       pickUp: { time: pickUp?.time ?? "", cars: [] },
       members: [member],
       createdAt: Date.now(),
+      timezone: timezone?.trim() || DEFAULT_TIMEZONE,
     };
 
     await autoAddCoParent(store, carpool, member.id, member.kids);

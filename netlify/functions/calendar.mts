@@ -24,7 +24,10 @@ type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
+  timezone?: string;
 };
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 const DAY_TO_ICAL: Record<string, string> = {
   Monday: "MO",
@@ -126,42 +129,98 @@ function foldLine(line: string): string {
   return chunks.join("\r\n ");
 }
 
-function icsDate(date: Date, time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const y = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}${mo}${d}T${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}00`;
+// A carpool's schedule is a wall-clock time in that carpool's own timezone
+// (e.g. "4pm in LA"), not a floating time. Google Calendar's subscribe-by-URL
+// importer treats a floating DTSTART (no Z, no TZID) as UTC and then
+// re-renders it in the viewer's own zone — silently shifting the displayed
+// time by that zone's UTC offset. Converting to a real UTC instant up front
+// (DTSTART...Z) sidesteps that ambiguity entirely; both Apple and Google
+// render an absolute instant identically.
+type ZonedParts = { year: number; month: number; day: number; hour: number; minute: number; weekday: string };
+
+const WEEKDAY_SHORT_TO_MON0: Record<string, number> = {
+  Mon: 0,
+  Tue: 1,
+  Wed: 2,
+  Thu: 3,
+  Fri: 4,
+  Sat: 5,
+  Sun: 6,
+};
+
+function zonedParts(date: Date, timeZone: string): ZonedParts {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  });
+  const parts = dtf.formatToParts(date).reduce<Record<string, string>>((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    weekday: parts.weekday,
+  };
 }
 
-// Next date (today included) that falls on the given Monday=0..Sunday=6 weekday.
-function nextDateForWeekday(weekdayMon0: number): Date {
-  const now = new Date();
-  const todayMon0 = (now.getDay() + 6) % 7;
+// UTC-minus-local offset (minutes) that `timeZone` observes at `utcMillis`.
+function timeZoneOffsetMinutes(utcMillis: number, timeZone: string): number {
+  const p = zonedParts(new Date(utcMillis), timeZone);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+  return (asUtc - utcMillis) / 60000;
+}
+
+// Convert a wall-clock y/mo/d h:mi as observed in `timeZone` to the UTC instant it represents.
+function zonedTimeToUtc(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): Date {
+  const naiveUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const offset = timeZoneOffsetMinutes(naiveUtc, timeZone);
+  return new Date(naiveUtc - offset * 60000);
+}
+
+function icsUtc(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+
+// Next date (today included) that falls on the given Monday=0..Sunday=6
+// weekday, as observed in `timeZone` (not the server's own zone).
+function nextDateForWeekday(weekdayMon0: number, timeZone: string): { year: number; month: number; day: number } {
+  const now = zonedParts(new Date(), timeZone);
+  const todayMon0 = WEEKDAY_SHORT_TO_MON0[now.weekday];
   const diff = (weekdayMon0 - todayMon0 + 7) % 7;
-  const d = new Date(now);
-  d.setDate(now.getDate() + diff);
-  return d;
+  // Anchor at UTC noon so adding days never crosses a local-date boundary.
+  const anchor = new Date(Date.UTC(now.year, now.month - 1, now.day + diff, 12));
+  return { year: anchor.getUTCFullYear(), month: anchor.getUTCMonth() + 1, day: anchor.getUTCDate() };
 }
 
 function utcStamp(): string {
-  return new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  return icsUtc(new Date());
 }
 
 function buildEvent(opts: {
   uid: string;
   summary: string;
-  date: Date;
+  date: { year: number; month: number; day: number };
   time: string;
+  timezone: string;
   location: string;
   url: string;
   day: string;
 }): string {
-  const dtstart = icsDate(opts.date, opts.time);
   const [h, m] = opts.time.split(":").map(Number);
-  const endDate = new Date(opts.date);
-  endDate.setHours(h, m + 15, 0, 0);
-  const dtend = icsDate(endDate, `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`);
+  const start = zonedTimeToUtc(opts.date.year, opts.date.month, opts.date.day, h, m, opts.timezone);
+  const dtstart = icsUtc(start);
+  const dtend = icsUtc(new Date(start.getTime() + 15 * 60000));
   const byday = DAY_TO_ICAL[opts.day];
 
   const lines = [
@@ -185,8 +244,9 @@ function buildEventsForCarpool(carpool: Carpool, memberId: string, origin: strin
   const self = carpool.members.find((m) => m.id === memberId);
   if (!self) return [];
 
+  const timezone = carpool.timezone || DEFAULT_TIMEZONE;
   const kidDefaults = computeKidDefaults(carpool.members);
-  const date = nextDateForWeekday(DAY_TO_MON0[carpool.day]);
+  const date = nextDateForWeekday(DAY_TO_MON0[carpool.day], timezone);
   const location = [carpool.destination?.street, carpool.destination?.zip].filter(Boolean).join(", ");
   const url = `${origin}/?carpool=${carpool.code}`;
 
@@ -223,6 +283,7 @@ function buildEventsForCarpool(carpool: Carpool, memberId: string, origin: strin
           summary,
           date,
           time: leg.time,
+          timezone,
           location,
           url,
           day: carpool.day,
@@ -252,7 +313,7 @@ export default async (req: Request) => {
     "PRODID:-//blisspool//carpool calendar//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:blisspool driving schedule",
+    "X-WR-CALNAME:blisspools",
     "X-PUBLISHED-TTL:PT1H",
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     ...events,

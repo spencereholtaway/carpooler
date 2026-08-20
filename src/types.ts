@@ -46,4 +46,28 @@ export type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
+  timezone: string; // IANA zone, e.g. "America/Los_Angeles"
 };
+
+// Zones we expect carpools to actually be in, shown in a picker. If a
+// browser's detected zone isn't one of these, callers should add it as an
+// extra option rather than force a pick from this list.
+export const COMMON_TIMEZONES: { value: string; label: string }[] = [
+  { value: "America/Los_Angeles", label: "Pacific Time" },
+  { value: "America/Denver", label: "Mountain Time" },
+  { value: "America/Phoenix", label: "Arizona (no DST)" },
+  { value: "America/Chicago", label: "Central Time" },
+  { value: "America/New_York", label: "Eastern Time" },
+  { value: "America/Anchorage", label: "Alaska Time" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time" },
+];
+
+export const DEFAULT_TIMEZONE = "America/Los_Angeles";
+
+export function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_TIMEZONE;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
+}

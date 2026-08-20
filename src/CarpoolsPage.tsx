@@ -4,7 +4,7 @@ import { BottomSheet } from "./BottomSheet";
 import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
 import { formatTime, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
-import { DAYS_OF_WEEK, type Carpool, type DayOfWeek } from "./types";
+import { COMMON_TIMEZONES, DAYS_OF_WEEK, detectTimezone, type Carpool, type DayOfWeek } from "./types";
 import type { LocalProfile } from "./useProfile";
 import { useTypewriter } from "./useTypewriter";
 
@@ -124,6 +124,10 @@ export function CarpoolsPage({
   const [destZip, setDestZip] = useState("");
   const [dropOffTime, setDropOffTime] = useState("");
   const [pickUpTime, setPickUpTime] = useState("");
+  const [timezone, setTimezone] = useState(detectTimezone);
+  const timezoneOptions = COMMON_TIMEZONES.some((tz) => tz.value === timezone)
+    ? COMMON_TIMEZONES
+    : [{ value: timezone, label: timezone }, ...COMMON_TIMEZONES];
   const [joinCode, setJoinCode] = useState(
     () => new URLSearchParams(window.location.search).get("join") ?? ""
   );
@@ -193,7 +197,7 @@ export function CarpoolsPage({
       const destination = { street: destStreet, zip: destZip };
       const dropOff = { time: dropOffTime, cars: [] };
       const pickUp = { time: pickUpTime, cars: [] };
-      onOpenCarpool(await createCarpool(trimmed, day, destination, dropOff, pickUp, member));
+      onOpenCarpool(await createCarpool(trimmed, day, destination, dropOff, pickUp, member, timezone));
       setOpenDialog(null);
     } catch {
       setError("Couldn't create that carpool. Try again.");
@@ -384,6 +388,16 @@ export function CarpoolsPage({
             onChange={(e) => setPickUpTime(e.target.value)}
             onInvalid={(e) => e.preventDefault()}
           />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Timezone</span>
+          <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+            {timezoneOptions.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
         </div>
         <KidPicker
           allKids={profile.kids}

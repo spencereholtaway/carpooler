@@ -24,6 +24,7 @@ type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
+  timezone?: string;
 };
 
 // Keep a leg's car list in sync with a member's driving toggle: drop their
@@ -386,6 +387,36 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       }
 
       return new Response(JSON.stringify({ carpoolsUpdated }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    // One-time backfill for carpools created before the `timezone` field
+    // existed. Every carpool on prod so far is in Pacific time, so this
+    // fills the gap directly rather than trying to infer a zone. Idempotent:
+    // records itself under "meta:timezoneBackfill" and no-ops on a second
+    // run unless forced. Only touches carpools that don't already have a
+    // timezone set, so it's safe to re-run after new carpools (which now
+    // always get one) exist.
+    case "backfillTimezone": {
+      const already = (await store.get("meta:timezoneBackfill")) as string | null;
+      if (already && !body.payload?.force) {
+        return new Response(JSON.stringify({ skipped: true, ranAt: already }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { blobs: carpoolBlobs } = await store.list({ prefix: "code:" });
+      let updated = 0;
+      for (const b of carpoolBlobs) {
+        const carpool = (await store.get(b.key, { type: "json" })) as Carpool | null;
+        if (!carpool || carpool.timezone) continue;
+        carpool.timezone = "America/Los_Angeles";
+        await store.setJSON(b.key, carpool);
+        updated++;
+      }
+
+      await store.set("meta:timezoneBackfill", new Date().toISOString());
+      return new Response(JSON.stringify({ updated }), {
         headers: { "Content-Type": "application/json" },
       });
     }

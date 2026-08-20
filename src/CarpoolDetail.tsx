@@ -6,7 +6,16 @@ import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeC
 import { KidPicker } from "./KidPicker";
 import { computeAutoRoute, type AutoRouteLegKind, type NamedStop } from "./autoRoute";
 import { mapsLink, multiStopMapsLink } from "./maps";
-import { DAYS_OF_WEEK, type Address, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
+import {
+  COMMON_TIMEZONES,
+  DAYS_OF_WEEK,
+  detectTimezone,
+  type Address,
+  type Car,
+  type Carpool,
+  type DayOfWeek,
+  type Member,
+} from "./types";
 import { useTypewriter } from "./useTypewriter";
 
 function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
@@ -582,6 +591,10 @@ export function CarpoolDetail({
   const [draftZip, setDraftZip] = useState(carpool.destination?.zip ?? "");
   const [draftDropOffTime, setDraftDropOffTime] = useState(carpool.dropOff?.time ?? "");
   const [draftPickUpTime, setDraftPickUpTime] = useState(carpool.pickUp?.time ?? "");
+  const [draftTimezone, setDraftTimezone] = useState(carpool.timezone || detectTimezone());
+  const draftTimezoneOptions = COMMON_TIMEZONES.some((tz) => tz.value === draftTimezone)
+    ? COMMON_TIMEZONES
+    : [{ value: draftTimezone, label: draftTimezone }, ...COMMON_TIMEZONES];
   const [household, setHousehold] = useState<{ coParentId: string | null; combined: boolean } | null>(
     null
   );
@@ -693,6 +706,7 @@ export function CarpoolDetail({
     setDraftZip(carpool.destination?.zip ?? "");
     setDraftDropOffTime(carpool.dropOff?.time ?? "");
     setDraftPickUpTime(carpool.pickUp?.time ?? "");
+    setDraftTimezone(carpool.timezone || detectTimezone());
     setEditingCarpool(true);
   };
 
@@ -713,7 +727,8 @@ export function CarpoolDetail({
         { street: draftStreet.trim(), zip: draftZip.trim() },
         { time: draftDropOffTime, cars: carpool.dropOff?.cars ?? [] },
         { time: draftPickUpTime, cars: carpool.pickUp?.cars ?? [] },
-        draftName.trim() || undefined
+        draftName.trim() || undefined,
+        draftTimezone
       );
       const withKids = await joinCarpool(updated.code, { ...self, kids: draftKids });
       onCarpoolUpdated(withKids);
@@ -1068,6 +1083,16 @@ export function CarpoolDetail({
         <div className="form-field">
           <span className="gate-field-label">Zip code</span>
           <input value={draftZip} onChange={(e) => setDraftZip(e.target.value)} inputMode="numeric" />
+        </div>
+        <div className="form-field">
+          <span className="gate-field-label">Timezone</span>
+          <select value={draftTimezone} onChange={(e) => setDraftTimezone(e.target.value)}>
+            {draftTimezoneOptions.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
         </div>
         <KidPicker
           allKids={allKids}
