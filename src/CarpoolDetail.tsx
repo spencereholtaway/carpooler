@@ -130,7 +130,11 @@ function buildAutoRouteLeg(
   const kidHomeStops: NamedStop[] = otherKids
     .map((kid) => ({ label: kid, address: kidHome(kid) }))
     .filter((s): s is NamedStop => !!s.address?.street);
-  if (kidHomeStops.length < 2) return null;
+  // A single kid isn't worth reordering — but when there's also a fixed
+  // stop (pick-up's drive to the destination before any kid), even one kid
+  // makes for a genuine multi-stop route worth chaining into one link.
+  const minKidStops = extraFixedStop ? 1 : 2;
+  if (kidHomeStops.length < minKidStops) return null;
   if (!bookend.address?.street) return null;
   if (extraFixedStop && !extraFixedStop.address?.street) return null;
   return { legKind, label, kidHomeStops, bookend: bookend as NamedStop, extraFixedStop: extraFixedStop as NamedStop | undefined };
@@ -642,6 +646,7 @@ export function CarpoolDetail({
           <DrivingStops
             legLabel="Pick-up directions"
             stops={[
+              { label: carpool.name, address: carpool.destination },
               ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
               { label: "Home", address: homeAddress },
             ]}
@@ -650,8 +655,11 @@ export function CarpoolDetail({
       </>
     )
   );
-  // A "complicated ride" is one with 2+ other-family stops on a leg — a
-  // single kid isn't worth optimizing an order for.
+  // Drop-off only chains once there are 2+ other-family stops to actually
+  // put in order — with one kid there's nothing to optimize beyond what the
+  // single-stop buttons above already offer. Pick-up always drives to the
+  // destination first, so even one kid still makes for a genuine multi-stop
+  // route worth bundling into one link (see buildAutoRouteLeg).
   const autoRouteLegs = [
     buildAutoRouteLeg("dropOff", "Optimize drop-off route", dropOffOtherKids, kidHome, {
       label: carpool.name,
