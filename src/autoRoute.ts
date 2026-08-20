@@ -105,7 +105,11 @@ export async function computeAutoRoute(
   bookend: NamedStop,
   extraFixedStop?: NamedStop,
 ): Promise<AutoRouteResult> {
-  if (kidHomeStops.length < 2) return { ok: false, reason: "too-few-stops" };
+  // Mirrors buildAutoRouteLeg's eligibility check in CarpoolDetail: a fixed
+  // stop (pick-up's drive to the destination before any kid) makes even one
+  // kid a genuine multi-stop route, so only drop-off needs 2+ to bother.
+  const minKidStops = extraFixedStop ? 1 : 2;
+  if (kidHomeStops.length < minKidStops) return { ok: false, reason: "too-few-stops" };
 
   const position = await getCurrentPosition();
   if (position === null) return { ok: false, reason: "geolocation-unavailable" };
