@@ -136,6 +136,11 @@ function AutoRouteButton({
   const handleClick = async () => {
     setState("loading");
     setErrorMsg(null);
+    // Opened synchronously, still inside the click's user-activation window —
+    // computeAutoRoute takes a few seconds (geolocation + geocoding), and a
+    // window.open() after that delay gets silently popup-blocked in most
+    // browsers. We navigate this already-open tab once the route is ready.
+    const routeTab = window.open("", "_blank", "noreferrer");
     const result = await computeAutoRoute(
       legKind,
       kidHomeStops,
@@ -143,12 +148,15 @@ function AutoRouteButton({
       extraFixedStop as NamedStop | undefined,
     );
     if (!result.ok) {
+      routeTab?.close();
       setState("error");
       setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
       return;
     }
     setState("idle");
-    window.open(multiStopMapsLink(result.orderedStops.map((s) => s.address)), "_blank", "noreferrer");
+    if (routeTab) {
+      routeTab.location.href = multiStopMapsLink(result.orderedStops.map((s) => s.address));
+    }
   };
 
   return (
