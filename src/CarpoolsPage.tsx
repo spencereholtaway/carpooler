@@ -142,6 +142,19 @@ export function CarpoolsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId]);
 
+  // Deep link from a calendar event ("Open in blisspool: .../?carpool=123456")
+  // straight into that carpool's detail view, once the list has loaded.
+  const openedDeepLink = useRef(false);
+  useEffect(() => {
+    if (openedDeepLink.current || !carpools) return;
+    const code = new URLSearchParams(window.location.search).get("carpool");
+    if (!code) return;
+    openedDeepLink.current = true;
+    const target = carpools.find((c) => c.code === code);
+    if (target) onOpenCarpool(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carpools]);
+
   const openJoin = () => {
     setError(null);
     setJoinCode("");

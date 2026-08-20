@@ -738,6 +738,10 @@ button {
 }
 
 .pill-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-weight: 600;
   font-size: 15px;
   padding: 14px 22px;
@@ -746,8 +750,17 @@ button {
   color: #fff;
   background: linear-gradient(100deg, #8b7bb8, #c98fa6);
   cursor: pointer;
+  text-decoration: none;
+  text-align: center;
   box-shadow: 0 10px 25px rgba(139, 123, 184, 0.3);
   transition: transform 0.3s var(--ease-bounce), box-shadow 0.3s ease, opacity 0.2s ease;
+}
+
+/* .pill-button doubles as an <a> (Apple/Google Calendar links) — without
+   this it'd inherit the browser's visited-link color instead of matching
+   the button variant it's styled as. */
+.pill-button:visited {
+  color: inherit;
 }
 
 .pill-button:hover {
@@ -1081,6 +1094,19 @@ button {
 
 .section-actions .pill-button {
   flex: 1;
+}
+
+.calendar-subscribe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.calendar-subscribe-actions .pill-button {
+  flex: 1;
+  white-space: nowrap;
 }
 
 .carpools-footer {

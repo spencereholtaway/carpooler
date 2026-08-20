@@ -34,6 +34,7 @@ export function ProfileEditor({
   } | null>(null);
   const [copied, setCopied] = useState(false);
   const [savingCombined, setSavingCombined] = useState(false);
+  const [calendarCopied, setCalendarCopied] = useState(false);
 
   useEffect(() => {
     getHousehold(memberId).then(setHousehold);
@@ -44,6 +45,15 @@ export function ProfileEditor({
     await navigator.clipboard.writeText(`${window.location.origin}?coparent=${household.code}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const calendarHttpUrl = `${window.location.origin}/api/calendar?memberId=${memberId}`;
+  const calendarWebcalUrl = calendarHttpUrl.replace(/^https?:\/\//, "webcal://");
+
+  const copyCalendarLink = async () => {
+    await navigator.clipboard.writeText(calendarHttpUrl);
+    setCalendarCopied(true);
+    setTimeout(() => setCalendarCopied(false), 2000);
   };
 
   const toggleCombined = async () => {
@@ -188,6 +198,30 @@ export function ProfileEditor({
             </button>
           </>
         )}
+      </div>
+
+      <div className="invite-box">
+        <span className="invite-label">Your driving calendar</span>
+        <p className="muted">
+          Subscribe to see who's driving your kids, where, and when — it updates automatically as
+          carpools change.
+        </p>
+        <div className="calendar-subscribe-actions">
+          <a className="pill-button secondary small" href={calendarWebcalUrl}>
+            📅 Apple Calendar
+          </a>
+          <a
+            className="pill-button secondary small"
+            href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(calendarHttpUrl)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            📅 Google Calendar
+          </a>
+        </div>
+        <button type="button" className="text-link" onClick={copyCalendarLink}>
+          {calendarCopied ? "Copied!" : "Copy calendar link instead"}
+        </button>
       </div>
 
       <div className="mini-form">
