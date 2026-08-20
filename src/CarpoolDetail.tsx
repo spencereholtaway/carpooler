@@ -560,7 +560,7 @@ export function CarpoolDetail({
   // detail view at the top, not wherever the list happened to be scrolled to.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [carpool.id]);
+  }, [carpool.code]);
 
   const kidDefaults = computeKidDefaults(carpool.members);
   const youSummary = summarizeCarpool(carpool, memberId);
