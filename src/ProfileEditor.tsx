@@ -56,6 +56,17 @@ export function ProfileEditor({
     setTimeout(() => setCalendarCopied(false), 2000);
   };
 
+  // Google doesn't offer a reliable deep link that pre-fills its "Add by
+  // URL" field (the old render?cid= trick gets rejected as an invalid
+  // calendar id by Google's current frontend) — so copy the link for them
+  // and land them on that settings screen instead of guessing at a hack.
+  const addToGoogleCalendar = async () => {
+    await navigator.clipboard.writeText(calendarHttpUrl);
+    setCalendarCopied(true);
+    setTimeout(() => setCalendarCopied(false), 2000);
+    window.open("https://calendar.google.com/calendar/r/settings/addbyurl", "_blank", "noreferrer");
+  };
+
   const toggleCombined = async () => {
     if (!household) return;
     setSavingCombined(true);
@@ -210,15 +221,13 @@ export function ProfileEditor({
           <a className="pill-button secondary small" href={calendarWebcalUrl}>
             📅 Apple Calendar
           </a>
-          <a
-            className="pill-button secondary small"
-            href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(calendarHttpUrl)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <button type="button" className="pill-button secondary small" onClick={addToGoogleCalendar}>
             📅 Google Calendar
-          </a>
+          </button>
         </div>
+        {calendarCopied && (
+          <p className="muted">Link copied — paste it into the "From URL" field that just opened.</p>
+        )}
         <button type="button" className="text-link" onClick={copyCalendarLink}>
           {calendarCopied ? "Copied!" : "Copy calendar link instead"}
         </button>
