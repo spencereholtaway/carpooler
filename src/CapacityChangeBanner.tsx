@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const DISMISSED_KEY = "blisspool:capacity-banner-dismissed";
+const DISMISSED_KEY = "blisspool:capacity-banner-dismissed-v2";
 
 export function CapacityChangeBanner() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === "true");
@@ -13,7 +13,7 @@ export function CapacityChangeBanner() {
   };
 
   const message =
-    "We updated how car capacity works - please check your numbers by clicking your name in the top-right of the screen.";
+    "Car capacity is now set per leg when you sign up to drive - check the seat count next to your name in each carpool.";
 
   return (
     <>
