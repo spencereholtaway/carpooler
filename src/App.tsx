@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CapacityChangeBanner } from "./CapacityChangeBanner";
 import "./index.css";
 import { useProfile } from "./useProfile";
 import { ProfileGate } from "./ProfileGate";
@@ -150,7 +149,6 @@ function App() {
         </div>
       </div>
       <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
-        <CapacityChangeBanner />
         {selectedCarpool ? (
           <CarpoolDetail
             carpool={selectedCarpool}
