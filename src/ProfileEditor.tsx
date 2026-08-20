@@ -47,7 +47,13 @@ export function ProfileEditor({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const calendarHttpUrl = `${window.location.origin}/api/calendar?memberId=${memberId}`;
+  // The `v` param exists only to bust Google/Apple's calendar-subscription
+  // cache — feed content changes alone (like renaming X-WR-CALNAME) don't
+  // reliably make a calendar app re-fetch an already-subscribed URL, so we
+  // bump this whenever we need existing subscribers to get a guaranteed
+  // fresh pull. The value is otherwise ignored by the feed handler.
+  const CALENDAR_FEED_VERSION = 2;
+  const calendarHttpUrl = `${window.location.origin}/api/calendar?memberId=${memberId}&v=${CALENDAR_FEED_VERSION}`;
   const calendarWebcalUrl = calendarHttpUrl.replace(/^https?:\/\//, "webcal://");
 
   // Google doesn't offer a reliable deep link that pre-fills its "Add by
