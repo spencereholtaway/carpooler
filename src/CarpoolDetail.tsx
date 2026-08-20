@@ -137,8 +137,9 @@ function buildAutoRouteLeg(
 }
 
 function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [readyUrl, setReadyUrl] = useState<string | null>(null);
 
   const handleClick = async () => {
     setState("loading");
@@ -150,14 +151,33 @@ function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
       setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
       return;
     }
-    setState("idle");
-    // Navigate the current tab rather than opening a new one. A
-    // window.open() called after the async geolocation/geocoding work
-    // above loses the click's user-activation window and gets silently
-    // popup-blocked (confirmed in testing); navigating in place has no
-    // such restriction.
-    window.location.href = multiStopMapsLink(result.orderedStops.map((s) => s.address));
+    // Don't navigate here: the geolocation/geocoding above is async, so by
+    // the time it resolves the click's user-activation window is gone.
+    // Without it, iOS Safari won't hand the maps.apple.com link off to the
+    // Maps app — it just opens the website instead. Surfacing a real link
+    // for the user to tap gives that tap its own fresh activation, which
+    // does get the handoff (same root cause as the window.open popup-
+    // blocking issue this replaced).
+    setReadyUrl(multiStopMapsLink(result.orderedStops.map((s) => s.address)));
+    setState("ready");
   };
+
+  if (state === "ready" && readyUrl) {
+    return (
+      <div className="auto-route-option">
+        <a
+          className="pill-button auto-route-option-button"
+          href={readyUrl}
+          onClick={() => {
+            setState("idle");
+            setReadyUrl(null);
+          }}
+        >
+          Open in Maps
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="auto-route-option">
