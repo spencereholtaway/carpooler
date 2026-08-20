@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
 import { BottomSheet } from "./BottomSheet";
+import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
 import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { computeAutoRoute, type AutoRouteLegKind, type NamedStop } from "./autoRoute";
@@ -939,13 +940,16 @@ export function CarpoolDetail({
         </div>
 
         {!soloMember && (
-          <div className="invite-box">
-            <span className="invite-label">Invite code</span>
-            <span className="invite-code">{carpool.code}</span>
-            <button type="button" className="pill-button secondary" onClick={copyLink}>
-              {copied ? "Copied!" : "Copy invite link"}
-            </button>
-          </div>
+          <>
+            <BuyMeACoffeeLink className="coffee-link-sidebar" />
+            <div className="invite-box">
+              <span className="invite-label">Invite code</span>
+              <span className="invite-code">{carpool.code}</span>
+              <button type="button" className="pill-button secondary" onClick={copyLink}>
+                {copied ? "Copied!" : "Copy invite link"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 

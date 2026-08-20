@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createCarpool, joinCarpool, listCarpools } from "./api";
 import { BottomSheet } from "./BottomSheet";
+import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
 import { formatTime, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { DAYS_OF_WEEK, type Carpool, type DayOfWeek } from "./types";
@@ -382,6 +383,7 @@ export function CarpoolsPage({
 
       <footer className="carpools-footer">
         <a href="mailto:blisspool-feedback@holtawaydesign.com">Feedback or Questions? Email us!</a>
+        <BuyMeACoffeeLink className="coffee-link-footer" />
       </footer>
     </div>
   );

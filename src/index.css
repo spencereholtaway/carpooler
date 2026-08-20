@@ -1095,6 +1095,21 @@ button {
   text-decoration: underline;
 }
 
+.coffee-link {
+  display: inline-block;
+}
+
+.coffee-link-footer {
+  margin-top: 12px;
+}
+
+.coffee-link-footer img {
+  display: block;
+  height: 40px;
+  width: auto;
+  margin: 0 auto;
+}
+
 .mini-form {
   display: flex;
   flex-direction: column;
@@ -1423,6 +1438,21 @@ button {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   animation: breathe-invite 6s ease-in-out infinite;
+}
+
+.coffee-link-sidebar {
+  /* Sits directly above .invite-box (order: 10) in both the mobile stacked
+     flow (where the sidebar is `display: contents`) and the desktop sidebar
+     column — same flex-item stretch as .invite-box gives it a matching
+     width without needing one set explicitly. */
+  order: 9;
+}
+
+.coffee-link-sidebar img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
 }
 
 @media (min-width: 900px) {
