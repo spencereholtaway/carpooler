@@ -1813,6 +1813,22 @@ button {
   text-decoration: none;
 }
 
+.auto-route {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: -2px;
+}
+
+.auto-route-button {
+  border-style: dashed;
+}
+
+.auto-route-error {
+  font-size: 12px;
+}
+
 /* Same two-copies-toggled-by-breakpoint trick as the AI summary above it —
    must come after .driving-stops-section so this display:none actually wins
    (equal specificity, so source order decides). */

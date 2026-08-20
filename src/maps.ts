@@ -18,3 +18,16 @@ export function mapsLink(street: string, zip: string): string {
     ? `https://maps.apple.com/?daddr=${destination}`
     : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
 }
+
+// Directions through multiple stops in order, ending at the last one. Like
+// mapsLink, no origin is passed, so both apps start from current location.
+export function multiStopMapsLink(stops: { street: string; zip: string }[]): string {
+  const addresses = stops.map((s) => encodeURIComponent([s.street, s.zip].filter(Boolean).join(", ")));
+  if (isIOS()) {
+    return `https://maps.apple.com/?daddr=${addresses.join("+to:")}`;
+  }
+  const destination = addresses[addresses.length - 1];
+  const waypoints = addresses.slice(0, -1);
+  const waypointsParam = waypoints.length > 0 ? `&waypoints=${waypoints.join("|")}` : "";
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}${waypointsParam}`;
+}

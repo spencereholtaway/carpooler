@@ -3,7 +3,8 @@ import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
 import { BottomSheet } from "./BottomSheet";
 import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
-import { mapsLink } from "./maps";
+import { computeAutoRoute, type AutoRouteLegKind, type NamedStop } from "./autoRoute";
+import { mapsLink, multiStopMapsLink } from "./maps";
 import { DAYS_OF_WEEK, type Address, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
 import { useTypewriter } from "./useTypewriter";
 
@@ -94,6 +95,73 @@ function DrivingStops({
           </a>
         ))}
       </div>
+    </div>
+  );
+}
+
+const AUTO_ROUTE_ERROR_COPY: Record<Exclude<Awaited<ReturnType<typeof computeAutoRoute>>, { ok: true }>["reason"], string> = {
+  "geolocation-denied": "Location access denied — enable it to use Auto Route.",
+  "geolocation-unavailable": "Couldn't get your location. Try again.",
+  "geocode-failed": "Couldn't look up one of the addresses. Try again.",
+  "too-few-stops": "",
+};
+
+// Beta: figures out a good order to visit the "other kids" stops and hands
+// the whole route (in that order) to the driver's Maps app at once, instead
+// of the one-stop-at-a-time links DrivingStops offers above.
+function AutoRouteButton({
+  legKind,
+  otherKids,
+  kidHome,
+  bookend,
+  extraFixedStop,
+}: {
+  legKind: AutoRouteLegKind;
+  otherKids: string[];
+  kidHome: (kid: string) => Address | undefined;
+  bookend: { label: string; address: Address | undefined };
+  extraFixedStop?: { label: string; address: Address | undefined };
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const kidHomeStops: NamedStop[] = otherKids
+    .map((kid) => ({ label: kid, address: kidHome(kid) }))
+    .filter((s): s is NamedStop => !!s.address?.street);
+
+  if (kidHomeStops.length < 2) return null;
+  if (!bookend.address?.street) return null;
+  if (extraFixedStop && !extraFixedStop.address?.street) return null;
+
+  const handleClick = async () => {
+    setState("loading");
+    setErrorMsg(null);
+    const result = await computeAutoRoute(
+      legKind,
+      kidHomeStops,
+      bookend as NamedStop,
+      extraFixedStop as NamedStop | undefined,
+    );
+    if (!result.ok) {
+      setState("error");
+      setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
+      return;
+    }
+    setState("idle");
+    window.open(multiStopMapsLink(result.orderedStops.map((s) => s.address)), "_blank", "noreferrer");
+  };
+
+  return (
+    <div className="auto-route">
+      <button
+        type="button"
+        className="pill-button small secondary driving-stop-button auto-route-button"
+        onClick={handleClick}
+        disabled={state === "loading"}
+      >
+        {state === "loading" ? "Finding best route…" : "🧭 Auto Route (beta)"}
+      </button>
+      {state === "error" && errorMsg && <span className="auto-route-error muted">{errorMsg}</span>}
     </div>
   );
 }
@@ -497,22 +565,39 @@ export function CarpoolDetail({
     ) : (
       <>
         {dropOffDrivingKids.length > 0 && (
-          <DrivingStops
-            legLabel="Drop-off directions"
-            stops={[
-              ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-              { label: carpool.name, address: carpool.destination },
-            ]}
-          />
+          <>
+            <DrivingStops
+              legLabel="Drop-off directions"
+              stops={[
+                ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+                { label: carpool.name, address: carpool.destination },
+              ]}
+            />
+            <AutoRouteButton
+              legKind="dropOff"
+              otherKids={dropOffOtherKids}
+              kidHome={kidHome}
+              bookend={{ label: carpool.name, address: carpool.destination }}
+            />
+          </>
         )}
         {pickUpDrivingKids.length > 0 && (
-          <DrivingStops
-            legLabel="Pick-up directions"
-            stops={[
-              ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-              { label: "Home", address: homeAddress },
-            ]}
-          />
+          <>
+            <DrivingStops
+              legLabel="Pick-up directions"
+              stops={[
+                ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+                { label: "Home", address: homeAddress },
+              ]}
+            />
+            <AutoRouteButton
+              legKind="pickUp"
+              otherKids={pickUpOtherKids}
+              kidHome={kidHome}
+              bookend={{ label: "Home", address: homeAddress }}
+              extraFixedStop={{ label: carpool.name, address: carpool.destination }}
+            />
+          </>
         )}
       </>
     )
