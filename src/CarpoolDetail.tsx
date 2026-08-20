@@ -148,7 +148,10 @@ function AutoRouteButton({
       extraFixedStop as NamedStop | undefined,
     );
     if (!result.ok) {
-      routeTab?.close();
+      console.error("Auto Route failed:", result.reason);
+      // Written into the tab (not just closed) so the failure reason is
+      // visible without opening devtools, while this is still in beta.
+      routeTab?.document.write(`<p style="font: 16px sans-serif; padding: 24px;">Auto Route couldn't build a route: ${result.reason}</p>`);
       setState("error");
       setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
       return;
