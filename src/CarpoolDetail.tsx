@@ -556,6 +556,12 @@ export function CarpoolDetail({
     getHousehold(memberId).then(setHousehold);
   }, [memberId]);
 
+  // Opening a carpool from a scrolled-down list position should land the
+  // detail view at the top, not wherever the list happened to be scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [carpool.id]);
+
   const kidDefaults = computeKidDefaults(carpool.members);
   const youSummary = summarizeCarpool(carpool, memberId);
   const { display: typedSummary, done: typingDone } = useTypewriter(youSummary);
