@@ -1,14 +1,14 @@
-// Beta feature: figures out a good order to visit several stops, using
-// straight-line distance (not real road routing) since we're only ever
-// ordering a handful of stops. The actual turn-by-turn routing is left to
-// the driver's Maps app once we hand off the ordered addresses to it.
+// Figures out a good order to visit several stops, using straight-line
+// distance (not real road routing) since we're only ever ordering a handful
+// of stops. The actual turn-by-turn routing is left to the driver's Maps app
+// once we hand off the ordered addresses to it.
 
 export type GeoPoint = { lat: number; lon: number };
 export type NamedStop = { label: string; address: { street: string; zip: string } };
 export type AutoRouteLegKind = "dropOff" | "pickUp";
 export type AutoRouteResult =
   | { ok: true; orderedStops: NamedStop[] }
-  | { ok: false; reason: "geolocation-denied" | "geolocation-unavailable" | "geocode-failed" | "too-few-stops" };
+  | { ok: false; reason: "geolocation-denied" | "geolocation-unavailable" | "geocode-failed" };
 
 // Nominatim (the free OSM geocoder used here) doesn't send CORS headers, so
 // the browser can't call it directly — /api/geocode proxies the lookup
@@ -105,12 +105,6 @@ export async function computeAutoRoute(
   bookend: NamedStop,
   extraFixedStop?: NamedStop,
 ): Promise<AutoRouteResult> {
-  // Mirrors buildAutoRouteLeg's eligibility check in CarpoolDetail: a fixed
-  // stop (pick-up's drive to the destination before any kid) makes even one
-  // kid a genuine multi-stop route, so only drop-off needs 2+ to bother.
-  const minKidStops = extraFixedStop ? 1 : 2;
-  if (kidHomeStops.length < minKidStops) return { ok: false, reason: "too-few-stops" };
-
   const position = await getCurrentPosition();
   if (position === null) return { ok: false, reason: "geolocation-unavailable" };
   if ("denied" in position) return { ok: false, reason: "geolocation-denied" };

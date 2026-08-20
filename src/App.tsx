@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CapacityChangeBanner } from "./CapacityChangeBanner";
 import "./index.css";
+import { useBackable } from "./useBackable";
 import { useProfile } from "./useProfile";
 import { ProfileGate } from "./ProfileGate";
 import { ProfileEditor } from "./ProfileEditor";
@@ -63,6 +64,11 @@ function App() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [carpools, setCarpools] = useState<Carpool[] | null>(null);
 
+  // Tie the two top-level screens/overlays to browser history so the back
+  // button and iOS/Android edge-swipe close them instead of leaving the app.
+  const closeCarpool = useBackable(Boolean(selectedCarpool), () => setSelectedCarpool(null));
+  const closeProfileEditor = useBackable(editingProfile, () => setEditingProfile(false));
+
   // Keep the already-fresh result of a create/join/edit around locally instead
   // of re-fetching the whole list on every back-navigation — that refetch is
   // what made the list feel slow, and re-reading data we just wrote risked
@@ -124,8 +130,8 @@ function App() {
             type="button"
             className="app-shell-title"
             onClick={() => {
-              setSelectedCarpool(null);
-              setEditingProfile(false);
+              closeProfileEditor();
+              closeCarpool();
             }}
           >
             blisspool
@@ -140,7 +146,7 @@ function App() {
             <button
               className="text-link"
               onClick={() => {
-                setSelectedCarpool(null);
+                closeCarpool();
                 clearProfile();
               }}
             >
@@ -156,7 +162,7 @@ function App() {
             carpool={selectedCarpool}
             memberId={memberId}
             allKids={profile.kids}
-            onBack={() => setSelectedCarpool(null)}
+            onBack={closeCarpool}
             onCarpoolUpdated={upsertCarpool}
           />
         ) : (
@@ -175,7 +181,7 @@ function App() {
           profile={profile}
           onSaved={saveProfile}
           onCarpoolUpdated={refreshCarpool}
-          onClose={() => setEditingProfile(false)}
+          onClose={closeProfileEditor}
         />
       )}
     </div>

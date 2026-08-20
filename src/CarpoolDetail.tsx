@@ -6,6 +6,7 @@ import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeC
 import { KidPicker } from "./KidPicker";
 import { computeAutoRoute, type AutoRouteLegKind, type NamedStop } from "./autoRoute";
 import { mapsLink, multiStopMapsLink } from "./maps";
+import { useBackable } from "./useBackable";
 import {
   COMMON_TIMEZONES,
   DAYS_OF_WEEK,
@@ -78,50 +79,15 @@ function AiMovePrompt({
   );
 }
 
-// A row of directions buttons, one per stop — every drive is at least two
-// locations (where you're coming from, where you're going), even when
-// that's just "Home" and the carpool's own destination.
-function DrivingStops({
-  legLabel,
-  stops,
-}: {
-  legLabel: string;
-  stops: { label: string; address: Address | undefined }[];
-}) {
-  const validStops = stops.filter((s): s is { label: string; address: Address } => !!s.address?.street);
-  if (validStops.length === 0) return null;
-  return (
-    <div className="driving-stops">
-      <span className="driving-stops-label muted">{legLabel}</span>
-      <div className="driving-stops-buttons">
-        {validStops.map((s) => (
-          <a
-            key={s.label}
-            className="pill-button small secondary driving-stop-button"
-            href={mapsLink(s.address.street, s.address.zip)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {s.label}
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const AUTO_ROUTE_ERROR_COPY: Record<Exclude<Awaited<ReturnType<typeof computeAutoRoute>>, { ok: true }>["reason"], string> = {
-  "geolocation-denied": "Location access denied — enable it to use Auto Route.",
+  "geolocation-denied": "Location access denied — enable it to use auto-routing.",
   "geolocation-unavailable": "Couldn't get your location. Try again.",
   "geocode-failed": "Couldn't look up one of the addresses. Try again.",
-  "too-few-stops": "",
 };
 
-// Beta: figures out a good order to visit the "other kids" stops and hands
-// the whole route (in that order) to the driver's Maps app at once, instead
-// of the one-stop-at-a-time links DrivingStops offers above. Each qualifying
-// leg (drop-off and/or pick-up) becomes one of these, offered from the FAB's
-// bottom sheet below.
+// The default way to navigate a leg: figures out a good order to visit the
+// "other kids" stops (if any) and hands the whole route to the driver's Maps
+// app at once, rather than making them tap through one stop at a time.
 type AutoRouteLeg = {
   legKind: AutoRouteLegKind;
   label: string;
@@ -141,18 +107,18 @@ function buildAutoRouteLeg(
   const kidHomeStops: NamedStop[] = otherKids
     .map((kid) => ({ label: kid, address: kidHome(kid) }))
     .filter((s): s is NamedStop => !!s.address?.street);
-  // A single kid isn't worth reordering — but when there's also a fixed
-  // stop (pick-up's drive to the destination before any kid), even one kid
-  // makes for a genuine multi-stop route worth chaining into one link.
-  const minKidStops = extraFixedStop ? 1 : 2;
-  if (kidHomeStops.length < minKidStops) return null;
   if (!bookend.address?.street) return null;
   if (extraFixedStop && !extraFixedStop.address?.street) return null;
   return { legKind, label, kidHomeStops, bookend: bookend as NamedStop, extraFixedStop: extraFixedStop as NamedStop | undefined };
 }
 
-function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
-  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+// One button per leg that triggers auto-routing directly — no separate
+// per-stop links to tap through. A state-changing button label is too easy
+// to miss, so once the route's ready this pops a bottom sheet instead: the
+// user's primary intent at that point is opening it in Maps, so that's the
+// one action offered there.
+function DriveLegButton({ leg }: { leg: AutoRouteLeg }) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [readyUrl, setReadyUrl] = useState<string | null>(null);
 
@@ -167,15 +133,8 @@ function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
         setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
         return;
       }
-      // Don't navigate here: the geolocation/geocoding above is async, so by
-      // the time it resolves the click's user-activation window is gone.
-      // Without it, iOS Safari won't hand the maps.apple.com link off to the
-      // Maps app — it just opens the website instead. Surfacing a real link
-      // for the user to tap gives that tap its own fresh activation, which
-      // does get the handoff (same root cause as the window.open popup-
-      // blocking issue this replaced).
       setReadyUrl(multiStopMapsLink(result.orderedStops.map((s) => s.address)));
-      setState("ready");
+      setState("idle");
     } catch (err) {
       // Without this, an unexpected throw here (rather than the ok:false
       // path above) left the button stuck on "Finding best route…" forever
@@ -186,66 +145,36 @@ function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
     }
   };
 
-  if (state === "ready" && readyUrl) {
-    return (
-      <div className="auto-route-option">
-        <a
-          className="pill-button auto-route-option-button"
-          href={readyUrl}
-          onClick={() => {
-            setState("idle");
-            setReadyUrl(null);
-          }}
-        >
-          Open in Maps
-        </a>
-      </div>
-    );
-  }
+  const closeReadySheet = useBackable(!!readyUrl, () => setReadyUrl(null));
 
   return (
-    <div className="auto-route-option">
-      <button type="button" className="pill-button auto-route-option-button" onClick={handleClick} disabled={state === "loading"}>
-        {state === "loading" ? "Finding best route…" : leg.label}
+    <div className="drive-leg">
+      <button type="button" className="pill-button drive-leg-button" onClick={handleClick} disabled={state === "loading"}>
+        {state === "loading" ? "Finding best route…" : `Drive ${leg.label}`}
       </button>
       {state === "error" && errorMsg && <span className="auto-route-error muted">{errorMsg}</span>}
-    </div>
-  );
-}
-
-// Mobile-only floating action button (see CSS) that surfaces the beta
-// multi-stop routing feature without cluttering the per-stop directions
-// buttons above — only appears when a leg actually has stops worth
-// optimizing.
-function AutoRouteFab({ legs }: { legs: AutoRouteLeg[] }) {
-  const [open, setOpen] = useState(false);
-  if (legs.length === 0) return null;
-
-  return (
-    <>
-      <button type="button" className="auto-route-fab" onClick={() => setOpen(true)} aria-label="blisspoolAI Auto Route">
-        <span className="auto-route-fab-sparkle" aria-hidden="true">
-          ✨
-        </span>
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <path
-            d="M9 4L4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinejoin="round"
-          />
-          <path d="M9 4v14M15 6v14" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-        </svg>
-      </button>
-      <BottomSheet open={open} onClose={() => setOpen(false)} title="This looks like a complicated ride!">
-        <p className="auto-route-sheet-body">Try blisspoolAI auto-route!</p>
-        <div className="auto-route-sheet-options">
-          {legs.map((leg) => (
-            <AutoRouteLegOption key={leg.legKind} leg={leg} />
-          ))}
-        </div>
+      <BottomSheet
+        open={!!readyUrl}
+        onClose={closeReadySheet}
+        title="Route ready!"
+        footer={
+          readyUrl && (
+            // Don't navigate here: the geolocation/geocoding that produced
+            // readyUrl was async, so by the time it resolved the original
+            // click's user-activation window was gone. Without it, iOS
+            // Safari won't hand the maps.apple.com link off to the Maps app
+            // — it just opens the website instead. This tap gets its own
+            // fresh activation, which does get the handoff (same root cause
+            // as the window.open popup-blocking issue this replaced).
+            <a className="pill-button" href={readyUrl} onClick={closeReadySheet}>
+              Open route in Maps
+            </a>
+          )
+        }
+      >
+        <p>Your {leg.label.toLowerCase()} route is ready to go.</p>
       </BottomSheet>
-    </>
+    </div>
   );
 }
 
@@ -329,6 +258,7 @@ function DrivingLeg({
   const [closingRow, setClosingRow] = useState<string | null>(null);
   const [selectedKids, setSelectedKids] = useState<string[]>([]);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [showCantCarpool, setShowCantCarpool] = useState(false);
   const coParentMember = coParentId ? members.find((m) => m.id === coParentId) : undefined;
   const mergeHousehold = householdCombined && !!coParentMember;
   const selfKidsList = members.find((m) => m.id === memberId)?.kids ?? [];
@@ -398,14 +328,21 @@ function DrivingLeg({
     }
   }
 
-  // You first, then your co-parent, then cars with free seats, then everyone
-  // else — alphabetical by name within each tier.
+  // You first, then your co-parent, then cars with open seats, then cars with
+  // no free seats, then everyone who can't carpool at all — alphabetical by
+  // name within each tier.
+  const rank = (r: (typeof mergedRowData)[number]) =>
+    r.isSelf ? 0 : r.m.id === coParentId ? 1 : r.eligible && r.free > 0 ? 2 : r.eligible ? 3 : 4;
   const rows = [...mergedRowData].sort((a, b) => {
-    const rank = (r: (typeof mergedRowData)[number]) =>
-      r.isSelf ? 0 : r.m.id === coParentId ? 1 : r.eligible && r.free > 0 ? 2 : 3;
     const rankDiff = rank(a) - rank(b);
     return rankDiff !== 0 ? rankDiff : a.m.name.localeCompare(b.m.name);
   });
+
+  // Members who can't carpool this leg (and aren't you or your co-parent,
+  // who always stay visible) just take up space and hide the people you can
+  // actually act on — tuck them behind a toggle instead of listing them all.
+  const visibleRows = rows.filter((r) => rank(r) < 4);
+  const cantCarpoolRows = rows.filter((r) => rank(r) === 4);
 
   const closeRow = (id: string) => {
     setClosingRow(id);
@@ -421,7 +358,32 @@ function DrivingLeg({
         <span className="driving-leg-time muted">{formatTime(time)}</span>
       </div>
       <div className="driving-row-list">
-        {rows.map(({ m, kids, eligible, free, isCoParent, canMoveHere, movableKids, displayName }) => {
+        {visibleRows.map(renderRow)}
+        {cantCarpoolRows.length > 0 && (
+          <button
+            type="button"
+            className="cant-carpool-toggle"
+            onClick={() => setShowCantCarpool((v) => !v)}
+          >
+            {showCantCarpool ? "Hide" : "Show"} {cantCarpoolRows.length} who can't carpool
+            <span className={`cant-carpool-caret ${showCantCarpool ? "open" : ""}`}>&#9662;</span>
+          </button>
+        )}
+        {showCantCarpool && cantCarpoolRows.map(renderRow)}
+      </div>
+    </div>
+  );
+
+  function renderRow({
+    m,
+    kids,
+    eligible,
+    free,
+    isCoParent,
+    canMoveHere,
+    movableKids,
+    displayName,
+  }: (typeof rows)[number]) {
           const expanded = canMoveHere && expandedRow === m.id;
           const closing = canMoveHere && closingRow === m.id;
           const multiPick = movableKids.length > 1;
@@ -555,10 +517,7 @@ function DrivingLeg({
               )}
             </div>
           );
-        })}
-      </div>
-    </div>
-  );
+  }
 }
 
 export function CarpoolDetail({
@@ -591,6 +550,11 @@ export function CarpoolDetail({
     null
   );
   const [confirmingOff, setConfirmingOff] = useState(false);
+
+  // Both sheets get a browser-history entry so the back button / edge-swipe
+  // dismisses them instead of leaving the app.
+  const closeCarpoolEditor = useBackable(editingCarpool, () => setEditingCarpool(false));
+  const closePendingOff = useBackable(!!pendingOff, () => setPendingOff(null));
 
   const self = carpool.members.find((m) => m.id === memberId);
   // With nobody else to coordinate with yet, "who's driving who" has only
@@ -651,64 +615,33 @@ export function CarpoolDetail({
   const dropOffOtherKids = dropOffDrivingKids.filter((k) => !myKids.has(k));
   const pickUpOtherKids = pickUpDrivingKids.filter((k) => !myKids.has(k));
   const hasDrivingStops = dropOffDrivingKids.length > 0 || pickUpDrivingKids.length > 0;
-  const onlyOwnKids = hasDrivingStops && dropOffOtherKids.length === 0 && pickUpOtherKids.length === 0;
   const homeAddress: Address | undefined = self ? { street: self.street, zip: self.zip } : undefined;
+  const dropOffLeg =
+    dropOffDrivingKids.length > 0
+      ? buildAutoRouteLeg("dropOff", "Drop-off", dropOffOtherKids, kidHome, {
+          label: carpool.name,
+          address: carpool.destination,
+        })
+      : null;
+  const pickUpLeg =
+    pickUpDrivingKids.length > 0
+      ? buildAutoRouteLeg(
+          "pickUp",
+          "Pick-up",
+          pickUpOtherKids,
+          kidHome,
+          { label: "Home", address: homeAddress },
+          { label: carpool.name, address: carpool.destination },
+        )
+      : null;
   // Rendered twice (mobile/desktop), same as the AI summary above it — see
   // the CSS toggle at the 900px breakpoint.
   const drivingStops = hasDrivingStops && (
-    onlyOwnKids ? (
-      // Nobody else to route past — just the day's two locations, no need
-      // to call out which leg is which.
-      <DrivingStops
-        legLabel="Directions"
-        stops={[
-          { label: "Home", address: homeAddress },
-          { label: carpool.name, address: carpool.destination },
-        ]}
-      />
-    ) : (
-      <>
-        {dropOffDrivingKids.length > 0 && (
-          <DrivingStops
-            legLabel="Drop-off directions"
-            stops={[
-              ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-              { label: carpool.name, address: carpool.destination },
-            ]}
-          />
-        )}
-        {pickUpDrivingKids.length > 0 && (
-          <DrivingStops
-            legLabel="Pick-up directions"
-            stops={[
-              { label: carpool.name, address: carpool.destination },
-              ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-              { label: "Home", address: homeAddress },
-            ]}
-          />
-        )}
-      </>
-    )
+    <>
+      {dropOffLeg && <DriveLegButton leg={dropOffLeg} />}
+      {pickUpLeg && <DriveLegButton leg={pickUpLeg} />}
+    </>
   );
-  // Drop-off only chains once there are 2+ other-family stops to actually
-  // put in order — with one kid there's nothing to optimize beyond what the
-  // single-stop buttons above already offer. Pick-up always drives to the
-  // destination first, so even one kid still makes for a genuine multi-stop
-  // route worth bundling into one link (see buildAutoRouteLeg).
-  const autoRouteLegs = [
-    buildAutoRouteLeg("dropOff", "Optimize drop-off route", dropOffOtherKids, kidHome, {
-      label: carpool.name,
-      address: carpool.destination,
-    }),
-    buildAutoRouteLeg(
-      "pickUp",
-      "Optimize pick-up route",
-      pickUpOtherKids,
-      kidHome,
-      { label: "Home", address: homeAddress },
-      { label: carpool.name, address: carpool.destination },
-    ),
-  ].filter((leg): leg is AutoRouteLeg => leg !== null);
 
   const openCarpoolEditor = () => {
     setDraftKids(self?.kids ?? []);
@@ -744,7 +677,7 @@ export function CarpoolDetail({
       );
       const withKids = await joinCarpool(updated.code, { ...self, kids: draftKids });
       onCarpoolUpdated(withKids);
-      setEditingCarpool(false);
+      closeCarpoolEditor();
     } finally {
       setSaving(false);
     }
@@ -863,11 +796,11 @@ export function CarpoolDetail({
       else await togglePickUp();
     } finally {
       setConfirmingOff(false);
-      setPendingOff(null);
+      closePendingOff();
     }
   };
 
-  const cancelPendingOff = () => setPendingOff(null);
+  const cancelPendingOff = () => closePendingOff();
 
   // The seat count on each leg's toggle row doubles as on/off: 0 means not
   // driving. Reads back off the same source DrivingLeg uses (car.seats) — no
@@ -1086,7 +1019,7 @@ export function CarpoolDetail({
 
       <BottomSheet
         open={editingCarpool}
-        onClose={() => setEditingCarpool(false)}
+        onClose={closeCarpoolEditor}
         title="Edit carpool"
         footer={
           <button type="button" className="pill-button" onClick={saveCarpool} disabled={saving}>
@@ -1185,8 +1118,6 @@ export function CarpoolDetail({
           {(pendingOff?.kids.length ?? 0) > 1 ? "their own parents'" : "their own parent's"} car.
         </p>
       </BottomSheet>
-
-      <AutoRouteFab legs={autoRouteLegs} />
     </div>
   );
 }
