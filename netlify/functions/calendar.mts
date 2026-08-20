@@ -98,17 +98,29 @@ function escapeText(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-// RFC 5545 requires folding lines longer than 75 octets, continued by a
-// line starting with a single space.
+// RFC 5545 requires folding lines longer than 75 *octets*, continued by a
+// line starting with a single space. Carpool/kid names can contain emoji,
+// so this has to split on UTF-8 byte boundaries — slicing the JS string by
+// character count can (and did) cut a multi-byte character in half and
+// corrupt the feed, which Google's stricter ICS parser then rejected
+// outright while Apple's silently tolerated the garbage.
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 function foldLine(line: string): string {
-  if (line.length <= 75) return line;
+  const bytes = encoder.encode(line);
+  if (bytes.length <= 75) return line;
+
   const chunks: string[] = [];
-  let rest = line;
+  let start = 0;
   let first = true;
-  while (rest.length > 0) {
+  while (start < bytes.length) {
     const width = first ? 75 : 74;
-    chunks.push(rest.slice(0, width));
-    rest = rest.slice(width);
+    let end = Math.min(start + width, bytes.length);
+    // Back off until `end` isn't in the middle of a multi-byte UTF-8
+    // sequence (continuation bytes match 10xxxxxx, i.e. 0x80-0xBF).
+    while (end > start && (bytes[end] & 0xc0) === 0x80) end--;
+    chunks.push(decoder.decode(bytes.slice(start, end)));
+    start = end;
     first = false;
   }
   return chunks.join("\r\n ");
