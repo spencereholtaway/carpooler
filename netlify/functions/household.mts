@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
+type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 
 function randomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();

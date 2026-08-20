@@ -491,6 +491,100 @@ button {
   margin: 4px 0 0;
 }
 
+.capacity-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+}
+
+.capacity-banner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.capacity-banner button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.capacity-banner button:hover {
+  color: var(--text-h);
+}
+
+/* Two copies exist — a rounded card in the mobile flow, a full-width strip
+   above the fixed header on desktop — same trick as .ai-summary-desktop-only
+   above. Desktop pushes .app-shell-topper down by the strip's height and
+   grows --topper-h (the single source of that fixed height, see its
+   definition) to match, so content below still clears both. */
+.capacity-banner-desktop-only {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .capacity-banner-mobile-only {
+    display: none;
+  }
+
+  .capacity-banner-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    height: 40px;
+    padding: 0 24px;
+    background: rgba(217, 119, 6, 0.1);
+    border-bottom: 1px solid rgba(217, 119, 6, 0.28);
+  }
+
+  .capacity-banner-bar p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .capacity-banner-bar button {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0 2px;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--muted-2);
+    cursor: pointer;
+  }
+
+  .capacity-banner-bar button:hover {
+    color: var(--text-h);
+  }
+
+  #root:has(.capacity-banner-bar) .app-shell-topper {
+    top: 40px;
+  }
+
+  #root:has(.capacity-banner-bar) {
+    --topper-h: 124px;
+  }
+}
+
 .gate-alpha-warning {
   display: flex;
   flex-direction: column;
@@ -1633,7 +1727,13 @@ button {
   background: var(--card-bg);
   font: inherit;
   text-align: left;
+  cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.leg-toggle-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .leg-toggle-row.checked {
@@ -1669,6 +1769,23 @@ button {
   font-size: 13px;
   color: var(--text-h);
   white-space: nowrap;
+}
+
+.leg-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  color: #fff;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.leg-toggle-row.checked .leg-check {
+  background: linear-gradient(100deg, #8b7bb8, #c98fa6);
+  border-color: transparent;
 }
 
 .driving-leg-header {
@@ -2170,52 +2287,6 @@ button {
   color: var(--text);
   font-weight: 400;
   font-style: italic;
-}
-
-/* A smaller variant of the profile's .seat-stepper, sized for a tight row
-   (the per-leg seat control on LegToggleRow) instead of a full-width
-   bottom-sheet field. */
-.seat-stepper-compact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.seat-stepper-compact button {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1px solid rgba(139, 123, 184, 0.35);
-  background: var(--glass-bg-strong);
-  color: var(--accent);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.2s var(--ease-bounce), background 0.2s ease;
-}
-
-.seat-stepper-compact button:hover {
-  background: rgba(139, 123, 184, 0.15);
-  transform: scale(1.08);
-}
-
-.seat-stepper-compact button:active {
-  transform: scale(0.9);
-}
-
-.seat-stepper-compact button:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-  transform: none;
-}
-
-.seat-stepper-compact .seat-count {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 15px;
-  min-width: 1.2em;
-  text-align: center;
-  color: var(--text-h);
 }
 
 /* --- admin: deliberately plain/generic, not the app's ethereal look --- */

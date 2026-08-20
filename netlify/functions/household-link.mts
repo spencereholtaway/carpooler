@@ -4,6 +4,7 @@ import { getStore } from "@netlify/blobs";
 type Member = {
   id: string;
   name: string;
+  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
@@ -11,8 +12,8 @@ type Member = {
   zip: string;
   coparentId?: string | null;
 };
-type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
-type Car = { driverId: string; kids: string[]; seats: number };
+type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
+type Car = { driverId: string; kids: string[] };
 type Leg = { time: string; cars: Car[] };
 type Carpool = {
   code: string;
@@ -49,6 +50,7 @@ async function backfillCoParentIntoCarpools(
     carpool.members.push({
       id: coParentId,
       name: coProfile.name,
+      seats: coProfile.seats,
       kids: sharedKids,
       canDriveDropOff: false,
       canDrivePickUp: false,

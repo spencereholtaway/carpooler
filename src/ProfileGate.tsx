@@ -17,6 +17,7 @@ export function ProfileGate({
   const [nameError, setNameError] = useState<string | null>(null);
   const [returning, setReturning] = useState(false);
 
+  const [seats, setSeats] = useState(0);
   const [kidInput, setKidInput] = useState("");
   const [kids, setKids] = useState<string[]>([]);
   const [kidsError, setKidsError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export function ProfileGate({
         try {
           const known = await getServerProfile(result.memberId);
           if (known) {
+            setSeats(known.seats);
             setKids(known.kids);
             setStreet(known.street);
             setZip(known.zip);
@@ -94,7 +96,7 @@ export function ProfileGate({
       setKidsError("Add at least one kid — carpools are organized by kid.");
       return;
     }
-    onSubmit({ name: name.trim(), kids, street: street.trim(), zip: zip.trim() });
+    onSubmit({ name: name.trim(), seats, kids, street: street.trim(), zip: zip.trim() });
   };
 
   if (step === 0) {
@@ -220,6 +222,34 @@ export function ProfileGate({
             required
           />
         </div>
+
+        <div className="gate-field">
+          <span className="gate-field-label gate-field-label-bold">
+            How many kids can you carry in your car, including your own?
+          </span>
+          <p className="subtext">
+            We'll work out how many seats that leaves for others based on who's riding with you
+            in a given carpool.
+          </p>
+          <div className="seat-stepper">
+            <button
+              type="button"
+              onClick={() => setSeats((s) => Math.max(0, s - 1))}
+              aria-label="Fewer seats"
+            >
+              &minus;
+            </button>
+            <span className="seat-count">{seats}</span>
+            <button
+              type="button"
+              onClick={() => setSeats((s) => Math.min(8, s + 1))}
+              aria-label="More seats"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
       </form>
     </div>
     <div className="floating-save-bar">

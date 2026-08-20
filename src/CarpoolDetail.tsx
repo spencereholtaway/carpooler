@@ -9,15 +9,14 @@ import { mapsLink, multiStopMapsLink } from "./maps";
 import { DAYS_OF_WEEK, type Address, type Car, type Carpool, type DayOfWeek, type Member } from "./types";
 import { useTypewriter } from "./useTypewriter";
 
-function moveKid(cars: Car[], kid: string, driverId: string | null, defaultSeats: number): Car[] {
+function moveKid(cars: Car[], kid: string, driverId: string | null): Car[] {
   const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
   if (!driverId) return cleared;
   // A member who isn't marked as driving this leg has no car entry at all —
   // moving a kid to them (e.g. their own kid, regardless of that toggle)
-  // needs to create one (seeded with their usual seat count) rather than
-  // silently no-op.
+  // needs to create one rather than silently no-op.
   if (!cleared.some((c) => c.driverId === driverId)) {
-    return [...cleared, { driverId, kids: [kid], seats: defaultSeats }];
+    return [...cleared, { driverId, kids: [kid] }];
   }
   return cleared.map((c) => (c.driverId === driverId ? { ...c, kids: [...c.kids, kid] } : c));
 }
@@ -240,54 +239,49 @@ function AutoRouteFab({ legs }: { legs: AutoRouteLeg[] }) {
   );
 }
 
-// The seat count doubles as the "I can drive" toggle: 0 means you're not
-// driving this leg at all, 1+ means you are, with that many free seats for
-// other people's kids (your own kid riding along doesn't count against it).
-// No separate checkbox — tapping "+" from 0 is how you start driving, and
-// dropping the last seat is how you stop.
 function LegToggleRow({
   label,
   time,
-  seats,
+  checked,
   disabled,
-  onChange,
+  onToggle,
 }: {
   label: string;
   time: string;
-  seats: number;
+  checked: boolean;
   disabled: boolean;
-  onChange: (delta: number) => void;
+  onToggle: () => void;
 }) {
-  const active = seats > 0;
   return (
-    <div className={`leg-toggle-row ${active ? "checked" : ""}`}>
+    <button
+      type="button"
+      className={`leg-toggle-row ${checked ? "checked" : ""}`}
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={checked}
+    >
       <span className="leg-toggle-info">
         <strong>{label}</strong>
         <span className="muted">{formatTime(time)}</span>
       </span>
       <span className="leg-check-group">
-        <span className="leg-check-label">Free seats</span>
-        <span className="seat-stepper-compact">
-          <button
-            type="button"
-            onClick={() => onChange(-1)}
-            disabled={disabled || seats === 0}
-            aria-label="Fewer seats"
-          >
-            &minus;
-          </button>
-          <span className="seat-count">{seats}</span>
-          <button
-            type="button"
-            onClick={() => onChange(1)}
-            disabled={disabled || seats >= 8}
-            aria-label="More seats"
-          >
-            +
-          </button>
+        <span className="leg-check-label">I can drive</span>
+        <span className="leg-check" aria-hidden="true">
+          {checked && (
+            <svg viewBox="0 0 16 16" width="11" height="11">
+              <path
+                d="M3 8.5L6.2 11.5L13 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
         </span>
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -339,12 +333,9 @@ function DrivingLeg({
       ? car.kids
       : m.kids.filter((k) => !assignedElsewhere.has(k) && kidDefaults.get(k) === m.id);
     const eligible = eligibleFor(m);
-    // A car's seat count is directly "how many free seats do you have" —
-    // seats offered to other people's kids. The driver's own kid(s) riding
-    // along don't count against it; only other members' kids do. No car yet
-    // (the normal case for anyone not driving) reads as zero free seats.
-    const otherKidsInCar = kids.filter((k) => !m.kids.includes(k)).length;
-    const free = eligible ? Math.max((car?.seats ?? 0) - otherKidsInCar, 0) : 0;
+    // A member's seat count is total car capacity, including their own
+    // kid(s) — every kid riding along counts against it.
+    const free = eligible ? Math.max(m.seats - kids.length, 0) : 0;
     const isSelf = m.id === memberId;
     const isCoParent = m.id === coParentId;
     // A parent can always move their own kid into their own car or their
@@ -417,9 +408,10 @@ function DrivingLeg({
           const closing = canMoveHere && closingRow === m.id;
           const multiPick = movableKids.length > 1;
 
-          // Selecting past this car's free-seat count swaps in the new kid
-          // for the oldest one already picked (with a note explaining why)
-          // rather than silently refusing.
+          // Selecting past this car's free-seat capacity swaps in the new
+          // kid for the oldest one already picked (with a note explaining
+          // why) rather than silently refusing — every kid, including the
+          // driver's own, counts against capacity now.
           const toggleSelect = (kid: string) => {
             setSelectedKids((prev) => {
               if (prev.includes(kid)) {
@@ -445,11 +437,7 @@ function DrivingLeg({
           };
 
           const commitMove = (kidsToMove: string[]) => {
-            // No profile default to seed from — a car created here (e.g. a
-            // parent moving their own kid in before ever toggling "I can
-            // drive") starts at the same 1 seat a fresh sign-up would.
-            const defaultSeats = cars.find((c) => c.driverId === m.id)?.seats ?? 1;
-            onCarsChange(kidsToMove.reduce((acc, kid) => moveKid(acc, kid, m.id, defaultSeats), cars));
+            onCarsChange(kidsToMove.reduce((acc, kid) => moveKid(acc, kid, m.id), cars));
             closeRow(m.id);
           };
 
@@ -795,8 +783,7 @@ export function CarpoolDetail({
     setApplyingMovePrompt(true);
     try {
       const currentCars = movePrompt.leg === "dropOff" ? carpool.dropOff?.cars ?? [] : carpool.pickUp?.cars ?? [];
-      const defaultSeats = currentCars.find((c) => c.driverId === memberId)?.seats ?? 1;
-      const cars = movePrompt.kids.reduce((acc, kid) => moveKid(acc, kid, memberId, defaultSeats), currentCars);
+      const cars = movePrompt.kids.reduce((acc, kid) => moveKid(acc, kid, memberId), currentCars);
       await updateLegCars(movePrompt.leg, cars);
     } finally {
       setApplyingMovePrompt(false);
@@ -853,43 +840,6 @@ export function CarpoolDetail({
   };
 
   const cancelPendingOff = () => setPendingOff(null);
-
-  // The seat count on each leg's toggle row doubles as on/off: 0 means not
-  // driving. Reads back off the same source DrivingLeg uses (car.seats) — no
-  // profile default to fall back to, just 1 for the sliver of a moment
-  // between flipping the toggle on and the server's car actually existing.
-  const legSelfSeats = (leg: "dropOff" | "pickUp") => {
-    if (!self) return 0;
-    const canDrive = leg === "dropOff" ? self.canDriveDropOff : self.canDrivePickUp;
-    if (!canDrive) return 0;
-    const cars = (leg === "dropOff" ? carpool.dropOff?.cars : carpool.pickUp?.cars) ?? [];
-    return cars.find((c) => c.driverId === memberId)?.seats ?? 1;
-  };
-
-  const changeLegSeats = async (leg: "dropOff" | "pickUp", delta: number) => {
-    if (!self) return;
-    const current = legSelfSeats(leg);
-    // Crossing either edge of the 0/1 boundary means turning driving on or
-    // off, which goes through the existing toggle flow (including the
-    // confirm-eviction prompt when someone else's kid is riding with you) —
-    // seat-count-only edits below never touch canDriveDropOff/PickUp.
-    if (current === 0 && delta > 0) {
-      if (leg === "dropOff") await toggleDropOff();
-      else await togglePickUp();
-      return;
-    }
-    if (current === 1 && delta < 0) {
-      if (leg === "dropOff") requestToggleDropOff();
-      else requestTogglePickUp();
-      return;
-    }
-    const clamped = Math.max(1, Math.min(8, current + delta));
-    const cars = (leg === "dropOff" ? carpool.dropOff?.cars : carpool.pickUp?.cars) ?? [];
-    const nextCars = cars.some((c) => c.driverId === memberId)
-      ? cars.map((c) => (c.driverId === memberId ? { ...c, seats: clamped } : c))
-      : [...cars, { driverId: memberId, kids: [], seats: clamped }];
-    await updateLegCars(leg, nextCars);
-  };
 
   return (
     <div className="carpool-detail">
@@ -954,9 +904,9 @@ export function CarpoolDetail({
               <LegToggleRow
                 label="Drop-off"
                 time={carpool.dropOff?.time ?? ""}
-                seats={legSelfSeats("dropOff")}
+                checked={self?.canDriveDropOff ?? false}
                 disabled={!self || togglingDropOff}
-                onChange={(delta) => changeLegSeats("dropOff", delta)}
+                onToggle={requestToggleDropOff}
               />
               {movePrompt?.leg === "dropOff" && (
                 <AiMovePrompt
@@ -972,9 +922,9 @@ export function CarpoolDetail({
               <LegToggleRow
                 label="Pick-up"
                 time={carpool.pickUp?.time ?? ""}
-                seats={legSelfSeats("pickUp")}
+                checked={self?.canDrivePickUp ?? false}
                 disabled={!self || togglingPickUp}
-                onChange={(delta) => changeLegSeats("pickUp", delta)}
+                onToggle={requestTogglePickUp}
               />
               {movePrompt?.leg === "pickUp" && (
                 <AiMovePrompt

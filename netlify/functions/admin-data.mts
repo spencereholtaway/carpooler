@@ -1,17 +1,18 @@
 import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
+type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 type Member = {
   id: string;
   name: string;
+  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
   street: string;
   zip: string;
 };
-type Car = { driverId: string; kids: string[]; seats: number };
+type Car = { driverId: string; kids: string[] };
 type Leg = { time: string; cars: Car[] };
 type Address = { street: string; zip: string };
 type Carpool = {
@@ -27,12 +28,9 @@ type Carpool = {
 
 // Keep a leg's car list in sync with a member's driving toggle: drop their
 // car if they can no longer drive it, or give them one (defaulting to their
-// own unclaimed kids) if they now can and don't have one yet — starting at 1
-// seat, same as pressing "+" once from off, since there's no profile default
-// to seed from. Mirrors syncCar in carpools-join.mts so admin toggles behave
-// the same as a member flipping their own toggle. An existing car's seat
-// count is left alone — that's a per-leg value edited directly, not
-// something a driving-toggle sync should clobber.
+// own unclaimed kids) if they now can and don't have one yet. Mirrors
+// syncCar in carpools-join.mts so admin toggles behave the same as a member
+// flipping their own toggle.
 function syncCar(leg: Leg, member: Member, canDrive: boolean) {
   leg.cars ??= [];
   if (!canDrive) {
@@ -46,18 +44,18 @@ function syncCar(leg: Leg, member: Member, canDrive: boolean) {
     if (unclaimedOwnKids.length > 0) existing.kids = [...existing.kids, ...unclaimedOwnKids];
     return;
   }
-  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids, seats: 1 });
+  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids });
 }
 
 // Mirrors moveKid in CarpoolDetail.tsx: pull the kid out of whatever car
-// they're currently in, then drop them into driverId's car (creating it,
-// seeded with defaultSeats, if the driver doesn't have one yet), or leave
-// them unassigned if driverId is null.
-function moveKidCar(cars: Car[], kid: string, driverId: string | null, defaultSeats: number): Car[] {
+// they're currently in, then drop them into driverId's car (creating it if
+// the driver doesn't have one yet), or leave them unassigned if driverId is
+// null.
+function moveKidCar(cars: Car[], kid: string, driverId: string | null): Car[] {
   const cleared = cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
   if (!driverId) return cleared;
   if (!cleared.some((c) => c.driverId === driverId)) {
-    return [...cleared, { driverId, kids: [kid], seats: defaultSeats }];
+    return [...cleared, { driverId, kids: [kid] }];
   }
   return cleared.map((c) => (c.driverId === driverId ? { ...c, kids: [...c.kids, kid] } : c));
 }
@@ -90,6 +88,7 @@ async function backfillCoParentIntoCarpools(
     carpool.members.push({
       id: coParentId,
       name: coProfile.name,
+      seats: coProfile.seats,
       kids: sharedKids,
       canDriveDropOff: false,
       canDrivePickUp: false,
@@ -138,9 +137,9 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
   switch (body.action) {
     case "createUser": {
-      const { name, kids, street, zip } = body.payload;
+      const { name, seats, kids, street, zip } = body.payload;
       const memberId = crypto.randomUUID();
-      const profile: ServerProfile = { name, kids: kids ?? [], street, zip };
+      const profile: ServerProfile = { name, seats: Number(seats) || 0, kids: kids ?? [], street, zip };
       await store.setJSON(`profile:${memberId}`, profile);
       await store.setJSON(`member:${memberId}`, []);
       return new Response(JSON.stringify({ memberId }), {
@@ -148,8 +147,8 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       });
     }
     case "updateUser": {
-      const { memberId, name, kids, street, zip } = body.payload;
-      const profile: ServerProfile = { name, kids, street, zip };
+      const { memberId, name, seats, kids, street, zip } = body.payload;
+      const profile: ServerProfile = { name, seats, kids, street, zip };
       await store.setJSON(`profile:${memberId}`, profile);
 
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
@@ -159,6 +158,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         const m = carpool.members.find((mm) => mm.id === memberId);
         if (!m) continue;
         m.name = name;
+        m.seats = seats;
         m.kids = kids;
         m.street = street;
         m.zip = zip;
@@ -257,7 +257,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       carpool.dropOff ??= { time: "", cars: [] };
       carpool.pickUp ??= { time: "", cars: [] };
       const target = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
-      target.cars = moveKidCar(target.cars ?? [], kid, driverId, 1);
+      target.cars = moveKidCar(target.cars ?? [], kid, driverId);
       await store.setJSON(`code:${code}`, carpool);
       return new Response("ok");
     }
@@ -282,6 +282,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       carpool.members.push({
         id: memberId,
         name: profile.name,
+        seats: profile.seats,
         kids: profile.kids,
         canDriveDropOff: false,
         canDrivePickUp: false,
@@ -304,86 +305,56 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await removeCodeFromMember(store, memberId, code);
       return new Response("ok");
     }
-    // One-time migration for the move to per-leg seats: capacity used to
-    // live only on the profile (a single `seats` number = total capacity
-    // including the driver's own kid, applied to every carpool a member
-    // drove). Now each `Car` in a leg carries its own `seats`, meaning "free
-    // seats for other people's kids" directly — no profile-level default at
-    // all, and a fresh sign-up starts at 1, same as pressing "+" once from
-    // off. This migration exists purely so nobody who was ALREADY driving
-    // before this shipped gets reset to 1: for any car that predates this
-    // change (no `seats` field yet), seed it from that driver's old profile
-    // `seats` value — checked on the carpool's own denormalized member row
-    // first, then their profile blob, since either one might still carry
-    // the legacy key — minus however many of the driver's own kids are
-    // already riding in that car, to convert the old "total incl. own kid"
-    // number into the new "free for others" one. Falls back to 1 only if no
-    // legacy value exists at all. Anyone who signs up to drive after this
-    // migration runs just gets the plain 1-seat default like everyone else.
-    // Idempotent: records itself under "meta:legSeatsBackfill" and no-ops on
-    // a second run unless forced.
+    // One-time backfill for the seats -> capacity change: `seats` used to mean
+    // "free seats for other people's kids" (a driver's own kids never
+    // consumed one); now it means total car capacity including the driver's
+    // own kids. Old values are reinterpreted as capacity = oldSeats +
+    // ownKidCount, both in each profile and in every carpool's denormalized
+    // copy of that member's row. Idempotent: records itself under
+    // "meta:capacityBackfill" and no-ops on a second run unless forced.
     case "backfillCapacity": {
-      const already = (await store.get("meta:legSeatsBackfill")) as string | null;
+      const already = (await store.get("meta:capacityBackfill")) as string | null;
       if (already && !body.payload?.force) {
         return new Response(JSON.stringify({ skipped: true, ranAt: already }), {
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      const legacySeatsByMember = new Map<string, number>();
       const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
+      let updated = 0;
       for (const b of profileBlobs) {
-        const profile = (await store.get(b.key, { type: "json" })) as { seats?: number } | null;
-        if (profile?.seats !== undefined) {
-          legacySeatsByMember.set(b.key.slice("profile:".length), profile.seats);
+        const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
+        if (!profile) continue;
+        const newSeats = profile.seats + profile.kids.length;
+        if (newSeats === profile.seats) continue;
+
+        const memberId = b.key.slice("profile:".length);
+        await store.setJSON(b.key, { ...profile, seats: newSeats });
+
+        const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+        for (const code of codes) {
+          const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+          const m = carpool?.members.find((mm) => mm.id === memberId);
+          if (!carpool || !m) continue;
+          m.seats = newSeats;
+          await store.setJSON(`code:${code}`, carpool);
         }
+        updated++;
       }
 
-      const { blobs: codeBlobs } = await store.list({ prefix: "code:" });
-      let carsUpdated = 0;
-      for (const b of codeBlobs) {
-        const carpool = (await store.get(b.key, { type: "json" })) as Carpool | null;
-        if (!carpool) continue;
-        let changed = false;
-
-        for (const leg of [carpool.dropOff, carpool.pickUp]) {
-          for (const car of leg?.cars ?? []) {
-            if (car.seats !== undefined) continue;
-            const driver = carpool.members.find((m) => m.id === car.driverId);
-            const legacyTotal = (driver as (Member & { seats?: number }) | undefined)?.seats
-              ?? legacySeatsByMember.get(car.driverId);
-            if (legacyTotal === undefined) {
-              car.seats = 1;
-            } else {
-              // The legacy number was total capacity including the driver's
-              // own kid(s); the new per-leg number is free seats for OTHER
-              // kids only, so subtract however many of the driver's own kids
-              // are already riding in this car to land on the equivalent
-              // free-seat count instead of resetting or double-counting.
-              const ownKidsInCar = car.kids.filter((k) => driver?.kids.includes(k)).length;
-              car.seats = Math.max(legacyTotal - ownKidsInCar, 0);
-            }
-            changed = true;
-            carsUpdated++;
-          }
-        }
-
-        if (changed) await store.setJSON(b.key, carpool);
-      }
-
-      await store.set("meta:legSeatsBackfill", new Date().toISOString());
-      return new Response(JSON.stringify({ carsUpdated }), {
+      await store.set("meta:capacityBackfill", new Date().toISOString());
+      return new Response(JSON.stringify({ updated }), {
         headers: { "Content-Type": "application/json" },
       });
     }
     // Every carpool keeps its own denormalized copy of a member's shared
-    // profile fields (name/street/zip), synced only when that member next
-    // hits "Save changes" in ProfileEditor — so a carpool a save's fetch
+    // profile fields (name/seats/street/zip), synced only when that member
+    // next hits "Save changes" in ProfileEditor — so a carpool a save's fetch
     // missed (or a save from before that sync existed) can drift stale
     // indefinitely. This re-pushes current profile values to every carpool
-    // for every member, matching exactly what ProfileEditor's own sync
-    // does: name/street/zip only, never touching a carpool's own kids
-    // subset or any car's per-leg seats (those aren't profile fields).
+    // for every member, matching exactly what ProfileEditor's own sync does:
+    // name/seats/street/zip only, never touching a carpool's own kids subset
+    // (that's per-carpool, not a copy of the household's full kid list).
     case "resyncProfileFields": {
       const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
       let carpoolsUpdated = 0;
@@ -397,10 +368,16 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
           const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
           const m = carpool?.members.find((mm) => mm.id === memberId);
           if (!carpool || !m) continue;
-          if (m.name === profile.name && m.street === profile.street && m.zip === profile.zip) {
+          if (
+            m.name === profile.name &&
+            m.seats === profile.seats &&
+            m.street === profile.street &&
+            m.zip === profile.zip
+          ) {
             continue;
           }
           m.name = profile.name;
+          m.seats = profile.seats;
           m.street = profile.street;
           m.zip = profile.zip;
           await store.setJSON(`code:${code}`, carpool);

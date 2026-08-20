@@ -183,6 +183,7 @@ export function CarpoolsPage({
       const member = {
         id: memberId,
         name: profile.name,
+        seats: profile.seats,
         kids: selectedKids,
         canDriveDropOff: false,
         canDrivePickUp: false,
@@ -217,6 +218,7 @@ export function CarpoolsPage({
       const member = {
         id: memberId,
         name: profile.name,
+        seats: profile.seats,
         kids: selectedKids,
         canDriveDropOff: false,
         canDrivePickUp: false,

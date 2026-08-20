@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
+type ServerProfile = { name: string; seats: number; kids: string[]; street: string; zip: string };
 
 export default async (req: Request) => {
   const store = getStore("carpools", { consistency: "strong" });

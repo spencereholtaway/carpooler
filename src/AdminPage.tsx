@@ -6,6 +6,7 @@ const KEY_STORAGE = "blisspool:admin-key";
 type AdminUser = {
   memberId: string;
   name: string;
+  seats: number;
   kids: string[];
   street: string;
   zip: string;
@@ -17,6 +18,7 @@ type AdminUser = {
 type AdminMember = {
   id: string;
   name: string;
+  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
@@ -26,8 +28,8 @@ type AdminCarpool = {
   name: string;
   day: string;
   destination?: { street: string; zip: string };
-  dropOff?: { time: string; cars: { driverId: string; kids: string[]; seats: number }[] };
-  pickUp?: { time: string; cars: { driverId: string; kids: string[]; seats: number }[] };
+  dropOff?: { time: string; cars: { driverId: string; kids: string[] }[] };
+  pickUp?: { time: string; cars: { driverId: string; kids: string[] }[] };
   members: AdminMember[];
   createdAt: number;
 };
@@ -461,11 +463,11 @@ export function AdminPage() {
     await load(key);
   };
 
-  const [newUser, setNewUser] = useState({ name: "", kids: "", street: "", zip: "" });
+  const [newUser, setNewUser] = useState({ name: "", seats: "1", kids: "", street: "", zip: "" });
   const [addingUser, setAddingUser] = useState(false);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const openAddUser = () => {
-    setNewUser({ name: "", kids: "", street: "", zip: "" });
+    setNewUser({ name: "", seats: "1", kids: "", street: "", zip: "" });
     setAddUserOpen(true);
   };
   const createUser = async () => {
@@ -474,6 +476,7 @@ export function AdminPage() {
     try {
       await callAdmin("createUser", {
         name: newUser.name.trim(),
+        seats: Number(newUser.seats) || 0,
         kids: newUser.kids.split(",").map((k) => k.trim()).filter(Boolean),
         street: newUser.street,
         zip: newUser.zip,
@@ -502,6 +505,7 @@ export function AdminPage() {
       await callAdmin("updateUser", {
         memberId: userDraft.memberId,
         name: userDraft.name,
+        seats: Number(userDraft.seats) || 0,
         kids: userDraft.kids,
         street: userDraft.street,
         zip: userDraft.zip,
@@ -672,6 +676,7 @@ export function AdminPage() {
                 <tr>
                   <th>Name</th>
                   <th>Kids</th>
+                  <th>Capacity</th>
                   <th>Street</th>
                   <th>Zip</th>
                   <th>Member ID</th>
@@ -683,6 +688,7 @@ export function AdminPage() {
                   <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
                     <td><HighlightedName name={u.name} query={userSearch} /></td>
                     <td>{u.kids?.join(", ") || "—"}</td>
+                    <td>{u.seats}</td>
                     <td>{u.street || "—"}</td>
                     <td>{u.zip || "—"}</td>
                     <td className="admin-mono">{u.memberId}</td>
@@ -791,6 +797,14 @@ export function AdminPage() {
                     kids: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
                   })
                 }
+              />
+            </label>
+            <label>
+              Capacity (incl. own kids)
+              <input
+                type="number"
+                value={userDraft.seats}
+                onChange={(e) => setUserDraft({ ...userDraft, seats: Number(e.target.value) })}
               />
             </label>
             <label>
@@ -912,6 +926,14 @@ export function AdminPage() {
             <input
               value={newUser.kids}
               onChange={(e) => setNewUser({ ...newUser, kids: e.target.value })}
+            />
+          </label>
+          <label>
+            Capacity (incl. own kids)
+            <input
+              type="number"
+              value={newUser.seats}
+              onChange={(e) => setNewUser({ ...newUser, seats: e.target.value })}
             />
           </label>
           <label>
