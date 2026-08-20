@@ -1,7 +1,6 @@
 export type Member = {
   id: string;
   name: string;
-  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
@@ -13,6 +12,7 @@ export type Member = {
 export type Car = {
   driverId: string;
   kids: string[];
+  seats: number;
 };
 
 export type Leg = {
