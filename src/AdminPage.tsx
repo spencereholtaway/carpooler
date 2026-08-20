@@ -32,6 +32,8 @@ type AdminCarpool = {
   createdAt: number;
 };
 
+type AdminUpdate = { id: string; text: string; createdAt: number };
+
 function CopyableCode({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -411,9 +413,10 @@ export function AdminPage() {
 
   const [key, setKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
   const [keyInput, setKeyInput] = useState("");
-  const [tab, setTab] = useState<"users" | "carpools">("users");
+  const [tab, setTab] = useState<"users" | "carpools" | "updates">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [carpools, setCarpools] = useState<AdminCarpool[]>([]);
+  const [updates, setUpdates] = useState<AdminUpdate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -432,6 +435,8 @@ export function AdminPage() {
       const data = await res.json();
       setUsers(data.users);
       setCarpools(data.carpools);
+      const updatesRes = await fetch("/api/updates");
+      if (updatesRes.ok) setUpdates((await updatesRes.json()).updates);
       localStorage.setItem(KEY_STORAGE, candidateKey);
       setKey(candidateKey);
     } catch {
@@ -459,6 +464,51 @@ export function AdminPage() {
     });
     if (!res.ok) throw new Error(await res.text());
     await load(key);
+  };
+
+  const callUpdates = async (action: string, payload: unknown) => {
+    const res = await fetch("/api/updates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, action, payload }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    await load(key);
+  };
+
+  const [newUpdateText, setNewUpdateText] = useState("");
+  const [addingUpdate, setAddingUpdate] = useState(false);
+  const createUpdate = async () => {
+    if (!newUpdateText.trim()) return;
+    setAddingUpdate(true);
+    try {
+      await callUpdates("createUpdate", { text: newUpdateText.trim() });
+      setNewUpdateText("");
+    } finally {
+      setAddingUpdate(false);
+    }
+  };
+
+  const [editingUpdate, setEditingUpdate] = useState<string | null>(null);
+  const [updateDraftText, setUpdateDraftText] = useState("");
+  const [savingUpdate, setSavingUpdate] = useState(false);
+  const startEditUpdate = (u: AdminUpdate) => {
+    setEditingUpdate(u.id);
+    setUpdateDraftText(u.text);
+  };
+  const saveUpdate = async () => {
+    if (!editingUpdate) return;
+    setSavingUpdate(true);
+    try {
+      await callUpdates("updateUpdate", { id: editingUpdate, text: updateDraftText });
+      setEditingUpdate(null);
+    } finally {
+      setSavingUpdate(false);
+    }
+  };
+  const deleteUpdate = async (id: string) => {
+    if (!confirm("Delete this update?")) return;
+    await callUpdates("deleteUpdate", { id });
   };
 
   const [newUser, setNewUser] = useState({ name: "", kids: "", street: "", zip: "" });
@@ -643,6 +693,9 @@ export function AdminPage() {
             <button className={tab === "carpools" ? "active" : ""} onClick={() => setTab("carpools")}>
               Carpools ({carpools.length})
             </button>
+            <button className={tab === "updates" ? "active" : ""} onClick={() => setTab("updates")}>
+              Updates ({updates.length})
+            </button>
           </nav>
         </div>
       </header>
@@ -748,6 +801,48 @@ export function AdminPage() {
                     </td>
                     <td>
                       <button onClick={(e) => { e.stopPropagation(); deleteCarpool(c.code); }}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </>
+        )}
+
+        {!loading && tab === "updates" && (
+          <>
+            <div className="admin-list-toolbar admin-add-update-row">
+              <input
+                type="text"
+                className="admin-search-input"
+                placeholder="New update text..."
+                value={newUpdateText}
+                onChange={(e) => setNewUpdateText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") createUpdate();
+                }}
+              />
+              <button type="button" onClick={createUpdate} disabled={addingUpdate || !newUpdateText.trim()}>
+                {addingUpdate ? "Adding..." : "+ Add update"}
+              </button>
+            </div>
+            <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Text</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {updates.map((u) => (
+                  <tr key={u.id} className="admin-row-clickable" onClick={() => startEditUpdate(u)}>
+                    <td>{u.text}</td>
+                    <td>{new Date(u.createdAt).toLocaleString()}</td>
+                    <td>
+                      <button onClick={(e) => { e.stopPropagation(); deleteUpdate(u.id); }}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -924,6 +1019,32 @@ export function AdminPage() {
           <label>
             Zip
             <input value={newUser.zip} onChange={(e) => setNewUser({ ...newUser, zip: e.target.value })} />
+          </label>
+        </div>
+      </SidePanel>
+
+      <SidePanel
+        open={editingUpdate !== null}
+        onClose={() => setEditingUpdate(null)}
+        title="Edit update"
+        footer={
+          <>
+            <button onClick={saveUpdate} disabled={savingUpdate || !updateDraftText.trim()}>
+              {savingUpdate ? "Saving..." : "Save"}
+            </button>{" "}
+            <button onClick={() => setEditingUpdate(null)}>Cancel</button>
+          </>
+        }
+      >
+        <div className="admin-panel-form">
+          <label>
+            Text
+            <textarea
+              rows={6}
+              value={updateDraftText}
+              onChange={(e) => setUpdateDraftText(e.target.value)}
+              autoFocus
+            />
           </label>
         </div>
       </SidePanel>

@@ -98,6 +98,13 @@ export async function linkHousehold(
   );
 }
 
+export type Update = { id: string; text: string; createdAt: number };
+
+export async function listUpdates(): Promise<Update[]> {
+  const { updates } = await unwrap(await fetch("/api/updates"));
+  return updates;
+}
+
 export async function updateCarpoolSchedule(
   code: string,
   day: DayOfWeek,
