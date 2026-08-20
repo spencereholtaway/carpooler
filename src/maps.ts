@@ -24,7 +24,9 @@ export function mapsLink(street: string, zip: string): string {
 export function multiStopMapsLink(stops: { street: string; zip: string }[]): string {
   const addresses = stops.map((s) => encodeURIComponent([s.street, s.zip].filter(Boolean).join(", ")));
   if (isIOS()) {
-    return `https://maps.apple.com/?daddr=${addresses.join("+to:")}`;
+    // "+" in a URL query string decodes to a space, so the literal "+to:"
+    // separator must be percent-encoded to survive as a real plus sign.
+    return `https://maps.apple.com/?daddr=${addresses.join("%2Bto:")}`;
   }
   const destination = addresses[addresses.length - 1];
   const waypoints = addresses.slice(0, -1);
