@@ -148,22 +148,31 @@ function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
   const handleClick = async () => {
     setState("loading");
     setErrorMsg(null);
-    const result = await computeAutoRoute(leg.legKind, leg.kidHomeStops, leg.bookend, leg.extraFixedStop);
-    if (!result.ok) {
-      console.error("Auto Route failed:", result.reason);
+    try {
+      const result = await computeAutoRoute(leg.legKind, leg.kidHomeStops, leg.bookend, leg.extraFixedStop);
+      if (!result.ok) {
+        console.error("Auto Route failed:", result.reason);
+        setState("error");
+        setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
+        return;
+      }
+      // Don't navigate here: the geolocation/geocoding above is async, so by
+      // the time it resolves the click's user-activation window is gone.
+      // Without it, iOS Safari won't hand the maps.apple.com link off to the
+      // Maps app — it just opens the website instead. Surfacing a real link
+      // for the user to tap gives that tap its own fresh activation, which
+      // does get the handoff (same root cause as the window.open popup-
+      // blocking issue this replaced).
+      setReadyUrl(multiStopMapsLink(result.orderedStops.map((s) => s.address)));
+      setState("ready");
+    } catch (err) {
+      // Without this, an unexpected throw here (rather than the ok:false
+      // path above) left the button stuck on "Finding best route…" forever
+      // with no visible sign anything went wrong.
+      console.error("Auto Route threw:", err);
       setState("error");
-      setErrorMsg(AUTO_ROUTE_ERROR_COPY[result.reason]);
-      return;
+      setErrorMsg("Something went wrong finding the route. Try again.");
     }
-    // Don't navigate here: the geolocation/geocoding above is async, so by
-    // the time it resolves the click's user-activation window is gone.
-    // Without it, iOS Safari won't hand the maps.apple.com link off to the
-    // Maps app — it just opens the website instead. Surfacing a real link
-    // for the user to tap gives that tap its own fresh activation, which
-    // does get the handoff (same root cause as the window.open popup-
-    // blocking issue this replaced).
-    setReadyUrl(multiStopMapsLink(result.orderedStops.map((s) => s.address)));
-    setState("ready");
   };
 
   if (state === "ready" && readyUrl) {
