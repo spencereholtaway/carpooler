@@ -29,15 +29,6 @@ type Carpool = {
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
-const DAY_TO_ICAL: Record<string, string> = {
-  Monday: "MO",
-  Tuesday: "TU",
-  Wednesday: "WE",
-  Thursday: "TH",
-  Friday: "FR",
-  Saturday: "SA",
-  Sunday: "SU",
-};
 // Monday = 0 .. Sunday = 6, matching src/types.ts's DAYS_OF_WEEK order.
 const DAY_TO_MON0: Record<string, number> = {
   Monday: 0,
@@ -207,6 +198,8 @@ function utcStamp(): string {
   return icsUtc(new Date());
 }
 
+const UTC_DAY_TO_ICAL = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
 function buildEvent(opts: {
   uid: string;
   summary: string;
@@ -215,13 +208,20 @@ function buildEvent(opts: {
   timezone: string;
   location: string;
   url: string;
-  day: string;
 }): string {
   const [h, m] = opts.time.split(":").map(Number);
   const start = zonedTimeToUtc(opts.date.year, opts.date.month, opts.date.day, h, m, opts.timezone);
   const dtstart = icsUtc(start);
   const dtend = icsUtc(new Date(start.getTime() + 15 * 60000));
-  const byday = DAY_TO_ICAL[opts.day];
+  // DTSTART is a bare UTC instant (no TZID), so per RFC 5545 the RRULE is
+  // evaluated in UTC too — BYDAY must match DTSTART's *UTC* weekday, not the
+  // carpool's local one. An evening Pacific time converts to the next UTC
+  // calendar day, so using the local day here (e.g. "TU" for a Tuesday
+  // practice) silently mismatches DTSTART's real UTC weekday (Wednesday);
+  // calendar apps then generate every recurrence *after* the first from the
+  // BYDAY rule, landing one day earlier in local time (Monday instead of
+  // Tuesday) even though the very first occurrence looked correct.
+  const byday = UTC_DAY_TO_ICAL[start.getUTCDay()];
 
   const lines = [
     "BEGIN:VEVENT",
@@ -286,7 +286,6 @@ function buildEventsForCarpool(carpool: Carpool, memberId: string, origin: strin
           timezone,
           location,
           url,
-          day: carpool.day,
         })
       );
     }
