@@ -50,12 +50,6 @@ export function ProfileEditor({
   const calendarHttpUrl = `${window.location.origin}/api/calendar?memberId=${memberId}`;
   const calendarWebcalUrl = calendarHttpUrl.replace(/^https?:\/\//, "webcal://");
 
-  const copyCalendarLink = async () => {
-    await navigator.clipboard.writeText(calendarHttpUrl);
-    setCalendarCopied(true);
-    setTimeout(() => setCalendarCopied(false), 2000);
-  };
-
   // Google doesn't offer a reliable deep link that pre-fills its "Add by
   // URL" field (the old render?cid= trick gets rejected as an invalid
   // calendar id by Google's current frontend) — so copy the link for them
@@ -217,20 +211,27 @@ export function ProfileEditor({
           Subscribe to see who's driving your kids, where, and when — it updates automatically as
           carpools change.
         </p>
-        <div className="calendar-subscribe-actions">
-          <a className="pill-button secondary small" href={calendarWebcalUrl}>
-            📅 Apple Calendar
-          </a>
-          <button type="button" className="pill-button secondary small" onClick={addToGoogleCalendar}>
-            📅 Google Calendar
-          </button>
+        <div className="calendar-subscribe-list">
+          <div className="calendar-subscribe-item">
+            <h5>Adding to Apple Calendar</h5>
+            <p className="muted">
+              Tap the button below — Calendar will open and ask you to confirm the subscription.
+            </p>
+            <a className="pill-button secondary small" href={calendarWebcalUrl}>
+              Add to Apple Calendar
+            </a>
+          </div>
+          <div className="calendar-subscribe-item">
+            <h5>Adding to Google Calendar</h5>
+            <p className="muted">
+              Copy the link below, then paste it into the "From URL" box that opens (Settings &rarr;
+              Add calendar &rarr; From URL).
+            </p>
+            <button type="button" className="pill-button secondary small" onClick={addToGoogleCalendar}>
+              {calendarCopied ? "Copied!" : "Copy calendar link"}
+            </button>
+          </div>
         </div>
-        {calendarCopied && (
-          <p className="muted">Link copied — paste it into the "From URL" field that just opened.</p>
-        )}
-        <button type="button" className="text-link" onClick={copyCalendarLink}>
-          {calendarCopied ? "Copied!" : "Copy calendar link instead"}
-        </button>
       </div>
 
       <div className="mini-form">

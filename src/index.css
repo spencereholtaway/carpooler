@@ -1096,17 +1096,29 @@ button {
   flex: 1;
 }
 
-.calendar-subscribe-actions {
+.calendar-subscribe-list {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 18px;
   width: 100%;
+  text-align: left;
 }
 
-.calendar-subscribe-actions .pill-button {
-  flex: 1;
-  white-space: nowrap;
+.calendar-subscribe-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.calendar-subscribe-item h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.calendar-subscribe-item p {
+  margin: 0;
 }
 
 .carpools-footer {
