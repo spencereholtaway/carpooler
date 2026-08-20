@@ -1813,16 +1813,61 @@ button {
   text-decoration: none;
 }
 
-.auto-route {
+/* Floating action button that opens the blisspoolAI Auto Route sheet.
+   Mobile-only — on a carpool with several other-family stops, desktop
+   already has room for buttons inline, but a FAB is a mobile pattern. */
+.auto-route-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin-top: -2px;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), #c98fa6);
+  color: var(--accent-text);
+  box-shadow: 0 8px 24px rgba(139, 123, 184, 0.45);
+  cursor: pointer;
 }
 
-.auto-route-button {
-  border-style: dashed;
+.auto-route-fab-sparkle {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.8));
+  animation: ai-sparkle-twinkle 2.4s ease-in-out infinite;
+}
+
+@media (min-width: 900px) {
+  .auto-route-fab {
+    display: none;
+  }
+}
+
+.auto-route-sheet-body {
+  margin: 0 0 16px;
+}
+
+.auto-route-sheet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auto-route-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auto-route-option-button {
+  width: 100%;
 }
 
 .auto-route-error {

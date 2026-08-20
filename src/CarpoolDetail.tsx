@@ -108,40 +108,42 @@ const AUTO_ROUTE_ERROR_COPY: Record<Exclude<Awaited<ReturnType<typeof computeAut
 
 // Beta: figures out a good order to visit the "other kids" stops and hands
 // the whole route (in that order) to the driver's Maps app at once, instead
-// of the one-stop-at-a-time links DrivingStops offers above.
-function AutoRouteButton({
-  legKind,
-  otherKids,
-  kidHome,
-  bookend,
-  extraFixedStop,
-}: {
+// of the one-stop-at-a-time links DrivingStops offers above. Each qualifying
+// leg (drop-off and/or pick-up) becomes one of these, offered from the FAB's
+// bottom sheet below.
+type AutoRouteLeg = {
   legKind: AutoRouteLegKind;
-  otherKids: string[];
-  kidHome: (kid: string) => Address | undefined;
-  bookend: { label: string; address: Address | undefined };
-  extraFixedStop?: { label: string; address: Address | undefined };
-}) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  label: string;
+  kidHomeStops: NamedStop[];
+  bookend: NamedStop;
+  extraFixedStop?: NamedStop;
+};
 
+function buildAutoRouteLeg(
+  legKind: AutoRouteLegKind,
+  label: string,
+  otherKids: string[],
+  kidHome: (kid: string) => Address | undefined,
+  bookend: { label: string; address: Address | undefined },
+  extraFixedStop?: { label: string; address: Address | undefined },
+): AutoRouteLeg | null {
   const kidHomeStops: NamedStop[] = otherKids
     .map((kid) => ({ label: kid, address: kidHome(kid) }))
     .filter((s): s is NamedStop => !!s.address?.street);
-
   if (kidHomeStops.length < 2) return null;
   if (!bookend.address?.street) return null;
   if (extraFixedStop && !extraFixedStop.address?.street) return null;
+  return { legKind, label, kidHomeStops, bookend: bookend as NamedStop, extraFixedStop: extraFixedStop as NamedStop | undefined };
+}
+
+function AutoRouteLegOption({ leg }: { leg: AutoRouteLeg }) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleClick = async () => {
     setState("loading");
     setErrorMsg(null);
-    const result = await computeAutoRoute(
-      legKind,
-      kidHomeStops,
-      bookend as NamedStop,
-      extraFixedStop as NamedStop | undefined,
-    );
+    const result = await computeAutoRoute(leg.legKind, leg.kidHomeStops, leg.bookend, leg.extraFixedStop);
     if (!result.ok) {
       console.error("Auto Route failed:", result.reason);
       setState("error");
@@ -158,17 +160,48 @@ function AutoRouteButton({
   };
 
   return (
-    <div className="auto-route">
-      <button
-        type="button"
-        className="pill-button small secondary driving-stop-button auto-route-button"
-        onClick={handleClick}
-        disabled={state === "loading"}
-      >
-        {state === "loading" ? "Finding best route…" : "🧭 Auto Route (beta)"}
+    <div className="auto-route-option">
+      <button type="button" className="pill-button auto-route-option-button" onClick={handleClick} disabled={state === "loading"}>
+        {state === "loading" ? "Finding best route…" : leg.label}
       </button>
       {state === "error" && errorMsg && <span className="auto-route-error muted">{errorMsg}</span>}
     </div>
+  );
+}
+
+// Mobile-only floating action button (see CSS) that surfaces the beta
+// multi-stop routing feature without cluttering the per-stop directions
+// buttons above — only appears when a leg actually has stops worth
+// optimizing.
+function AutoRouteFab({ legs }: { legs: AutoRouteLeg[] }) {
+  const [open, setOpen] = useState(false);
+  if (legs.length === 0) return null;
+
+  return (
+    <>
+      <button type="button" className="auto-route-fab" onClick={() => setOpen(true)} aria-label="blisspoolAI Auto Route">
+        <span className="auto-route-fab-sparkle" aria-hidden="true">
+          ✨
+        </span>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <path
+            d="M9 4L4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <path d="M9 4v14M15 6v14" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <BottomSheet open={open} onClose={() => setOpen(false)} title="This looks like a complicated ride!">
+        <p className="auto-route-sheet-body">Try blisspoolAI auto-route!</p>
+        <div className="auto-route-sheet-options">
+          {legs.map((leg) => (
+            <AutoRouteLegOption key={leg.legKind} leg={leg} />
+          ))}
+        </div>
+      </BottomSheet>
+    </>
   );
 }
 
@@ -571,43 +604,42 @@ export function CarpoolDetail({
     ) : (
       <>
         {dropOffDrivingKids.length > 0 && (
-          <>
-            <DrivingStops
-              legLabel="Drop-off directions"
-              stops={[
-                ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-                { label: carpool.name, address: carpool.destination },
-              ]}
-            />
-            <AutoRouteButton
-              legKind="dropOff"
-              otherKids={dropOffOtherKids}
-              kidHome={kidHome}
-              bookend={{ label: carpool.name, address: carpool.destination }}
-            />
-          </>
+          <DrivingStops
+            legLabel="Drop-off directions"
+            stops={[
+              ...dropOffOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+              { label: carpool.name, address: carpool.destination },
+            ]}
+          />
         )}
         {pickUpDrivingKids.length > 0 && (
-          <>
-            <DrivingStops
-              legLabel="Pick-up directions"
-              stops={[
-                ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
-                { label: "Home", address: homeAddress },
-              ]}
-            />
-            <AutoRouteButton
-              legKind="pickUp"
-              otherKids={pickUpOtherKids}
-              kidHome={kidHome}
-              bookend={{ label: "Home", address: homeAddress }}
-              extraFixedStop={{ label: carpool.name, address: carpool.destination }}
-            />
-          </>
+          <DrivingStops
+            legLabel="Pick-up directions"
+            stops={[
+              ...pickUpOtherKids.map((kid) => ({ label: kid, address: kidHome(kid) })),
+              { label: "Home", address: homeAddress },
+            ]}
+          />
         )}
       </>
     )
   );
+  // A "complicated ride" is one with 2+ other-family stops on a leg — a
+  // single kid isn't worth optimizing an order for.
+  const autoRouteLegs = [
+    buildAutoRouteLeg("dropOff", "Optimize drop-off route", dropOffOtherKids, kidHome, {
+      label: carpool.name,
+      address: carpool.destination,
+    }),
+    buildAutoRouteLeg(
+      "pickUp",
+      "Optimize pick-up route",
+      pickUpOtherKids,
+      kidHome,
+      { label: "Home", address: homeAddress },
+      { label: carpool.name, address: carpool.destination },
+    ),
+  ].filter((leg): leg is AutoRouteLeg => leg !== null);
 
   const openCarpoolEditor = () => {
     setDraftKids(self?.kids ?? []);
@@ -1031,6 +1063,8 @@ export function CarpoolDetail({
           {(pendingOff?.kids.length ?? 0) > 1 ? "their own parents'" : "their own parent's"} car.
         </p>
       </BottomSheet>
+
+      <AutoRouteFab legs={autoRouteLegs} />
     </div>
   );
 }
