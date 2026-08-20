@@ -107,9 +107,9 @@ function legSentences(
 
 // The blisspoolAI line(s) for a carpool from this member's point of view,
 // joined with "\n" — shared between the full carpool detail view and the
-// compact carpools list. Any driver (self or someone else) covering both
-// legs for the same kid gets a combined "both ways" line instead of two
-// separate ones.
+// compact carpools list. A driver (self or someone else) whose drop-off and
+// pick-up legs are the exact same set of kids gets a combined "both ways"
+// line instead of two separate ones.
 export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   const self = carpool.members.find((m) => m.id === memberId);
   if (!self) return "";
@@ -120,13 +120,20 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   const dropOffDrivers = resolveKidDrivers(carpool.dropOff?.cars ?? [], carpool.members, kidDefaults);
   const pickUpDrivers = resolveKidDrivers(carpool.pickUp?.cars ?? [], carpool.members, kidDefaults);
 
+  // "Both ways" only applies when a driver's two legs are the exact same
+  // set of kids — a driver taking Mo, Miles, and William there but only
+  // picking up Miles and William isn't driving "both ways", they're just
+  // driving different kids on each leg, so each leg reports its own list.
   const driverIds = new Set([...dropOffDrivers.values(), ...pickUpDrivers.values()]);
   const bothWaysByDriver = new Map<string, string[]>();
   for (const driverId of driverIds) {
-    const kids = allCarpoolKids.filter(
-      (k) => dropOffDrivers.get(k) === driverId && pickUpDrivers.get(k) === driverId
-    );
-    if (kids.length > 0) bothWaysByDriver.set(driverId, kids);
+    const dropOffKids = allCarpoolKids.filter((k) => dropOffDrivers.get(k) === driverId);
+    const pickUpKids = allCarpoolKids.filter((k) => pickUpDrivers.get(k) === driverId);
+    const sameKids =
+      dropOffKids.length > 0 &&
+      dropOffKids.length === pickUpKids.length &&
+      dropOffKids.every((k) => pickUpKids.includes(k));
+    if (sameKids) bothWaysByDriver.set(driverId, dropOffKids);
   }
 
   const dropOffSelf = allCarpoolKids.filter((k) => dropOffDrivers.get(k) === memberId);
