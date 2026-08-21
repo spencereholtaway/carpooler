@@ -107,6 +107,29 @@ function HighlightedName({ name, query }: { name: string; query: string }) {
   return <>{parts}</>;
 }
 
+// A kid this user shares with their linked co-parent (same spelling on both
+// profiles) is genuinely the same child, not two — flag that inline so it
+// reads as one kid with two parents instead of looking like a duplicate.
+// Only fires when the co-parent's own kids list actually contains the exact
+// same string; a kid only one side has listed shows plain, same as before.
+function KidsCell({ user, users }: { user: AdminUser; users: AdminUser[] }) {
+  if (!user.kids || user.kids.length === 0) return <>—</>;
+  const coParent = user.coParentId ? users.find((u) => u.memberId === user.coParentId) : null;
+  return (
+    <>
+      {user.kids.map((kid, i) => (
+        <span key={kid}>
+          {i > 0 && ", "}
+          {kid}
+          {coParent?.kids?.includes(kid) && (
+            <span className="admin-muted"> (w/ {coParent.name})</span>
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function NameAutosuggest({
   options,
   value,
@@ -735,7 +758,7 @@ export function AdminPage() {
                 {filteredUsers.map((u) => (
                   <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
                     <td><HighlightedName name={u.name} query={userSearch} /></td>
-                    <td>{u.kids?.join(", ") || "—"}</td>
+                    <td><KidsCell user={u} users={users} /></td>
                     <td>{u.street || "—"}</td>
                     <td>{u.zip || "—"}</td>
                     <td className="admin-mono">{u.memberId}</td>
