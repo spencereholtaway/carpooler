@@ -2,12 +2,13 @@ import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
 type Member = { id: string; name: string; kids: string[] };
-type Carpool = { code: string; name: string; members: Member[] };
+type Carpool = { code: string; name: string; day: string; members: Member[] };
 type ServerProfile = { name: string; kids: string[] };
 
 type RecommendationCard = {
   carpoolCode: string;
   carpoolName: string;
+  carpoolDay: string;
   kidNames: string[];
   memberFirstNames: string[];
 };
@@ -124,6 +125,7 @@ export default async (req: Request) => {
     return {
       carpoolCode: code,
       carpoolName: carpool.name,
+      carpoolDay: carpool.day,
       kidNames: [...kidNames],
       memberFirstNames: carpool.members.map((m) => firstName(m.name)),
     };

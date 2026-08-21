@@ -101,6 +101,7 @@ function RecommendationCardView({
     <div className="rec-card">
       <span className="rec-card-for">For {card.kidNames.join(" & ")}</span>
       <span className="rec-card-name">{card.carpoolName}</span>
+      <span className="rec-card-day muted">{card.carpoolDay}s</span>
       <span className="rec-card-members muted">{joinLine(card.memberFirstNames)}</span>
       <button type="button" className="pill-button small" onClick={onStart} disabled={status.kind === "joining"}>
         {status.kind === "joining" ? "Adding..." : `Add ${card.kidNames.join(" & ")}`}

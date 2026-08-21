@@ -114,6 +114,7 @@ export async function listUpdates(): Promise<Update[]> {
 export type RecommendationCard = {
   carpoolCode: string;
   carpoolName: string;
+  carpoolDay: string;
   kidNames: string[];
   memberFirstNames: string[];
 };
