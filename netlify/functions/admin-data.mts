@@ -694,6 +694,126 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         headers: { "Content-Type": "application/json" },
       });
     }
+    // One-time backfill for co-parents linked before backfillCoParentIntoCarpools
+    // existed (or before it merged kids at link time): re-runs the same
+    // kid-merge + carpool-backfill that linkCoParents now does, for every
+    // pair that's currently linked, in both directions. Pass payload.dryRun
+    // to report what would change without writing anything — use this first
+    // to check asymmetricLinks (a coparent: pointer that isn't reciprocated,
+    // a sign of stale/corrupt link data) and possibleDuplicates (a carpool
+    // that already has a different member with the same name as the
+    // co-parent being added — skipped rather than risking a second row for
+    // the same person under a leftover duplicate profile id). Idempotent
+    // like the other backfills: records itself under
+    // "meta:coParentCarpoolBackfill" and no-ops on a second real run unless
+    // forced (dry runs never check or set that key).
+    case "backfillCoParentCarpools": {
+      const dryRun = !!body.payload?.dryRun;
+      const already = (await store.get("meta:coParentCarpoolBackfill")) as string | null;
+      if (already && !body.payload?.force && !dryRun) {
+        return new Response(JSON.stringify({ skipped: true, ranAt: already }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { blobs: coparentBlobs } = await store.list({ prefix: "coparent:" });
+      const linkMap = new Map<string, string>();
+      for (const b of coparentBlobs) {
+        const partner = (await store.get(b.key)) as string | null;
+        if (partner) linkMap.set(b.key.slice("coparent:".length), partner);
+      }
+
+      const asymmetricLinks: string[] = [];
+      const seenPairs = new Set<string>();
+      const pairs: [string, string][] = [];
+      for (const [id, partner] of linkMap) {
+        const pairKey = [id, partner].sort().join("|");
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+        if (linkMap.get(partner) !== id) {
+          asymmetricLinks.push(`${id} -> ${partner} (but ${partner} -> ${linkMap.get(partner) ?? "nothing"})`);
+          continue;
+        }
+        pairs.push([id, partner]);
+      }
+
+      const possibleDuplicates: string[] = [];
+      let kidsMerged = 0;
+      let carpoolsAdded = 0;
+
+      for (const [a, b2] of pairs) {
+        const profileA = (await store.get(`profile:${a}`, { type: "json" })) as ServerProfile | null;
+        const profileB = (await store.get(`profile:${b2}`, { type: "json" })) as ServerProfile | null;
+        if (!profileA || !profileB) continue;
+
+        const mergedKids = Array.from(new Set([...profileA.kids, ...profileB.kids]));
+        if (mergedKids.length !== profileA.kids.length || mergedKids.length !== profileB.kids.length) {
+          kidsMerged++;
+          if (!dryRun) {
+            if (mergedKids.length !== profileA.kids.length) {
+              await store.setJSON(`profile:${a}`, { ...profileA, kids: mergedKids });
+            }
+            if (mergedKids.length !== profileB.kids.length) {
+              await store.setJSON(`profile:${b2}`, { ...profileB, kids: mergedKids });
+            }
+          }
+        }
+        profileA.kids = mergedKids;
+        profileB.kids = mergedKids;
+
+        for (const [ownerId, coParentId, coProfile] of [
+          [a, b2, profileB],
+          [b2, a, profileA],
+        ] as const) {
+          const codes = ((await store.get(`member:${ownerId}`, { type: "json" })) as string[] | null) ?? [];
+          for (const code of codes) {
+            const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+            if (!carpool || carpool.members.some((m) => m.id === coParentId)) continue;
+
+            const nameCollision = carpool.members.find(
+              (m) => m.name === coProfile.name && m.id !== coParentId
+            );
+            if (nameCollision) {
+              possibleDuplicates.push(
+                `Carpool ${code} ("${carpool.name}") already has a member named "${coProfile.name}" under id ${nameCollision.id}, different from linked co-parent id ${coParentId} — skipped to avoid a duplicate row`
+              );
+              continue;
+            }
+
+            const owner = carpool.members.find((m) => m.id === ownerId);
+            if (!owner) continue;
+            const sharedKids = owner.kids.filter((k) => coProfile.kids.includes(k));
+            if (sharedKids.length === 0) continue;
+
+            carpoolsAdded++;
+            if (!dryRun) {
+              carpool.members.push({
+                id: coParentId,
+                name: coProfile.name,
+                kids: sharedKids,
+                canDriveDropOff: false,
+                canDrivePickUp: false,
+                street: coProfile.street,
+                zip: coProfile.zip,
+              });
+              await store.setJSON(`code:${code}`, carpool);
+              const existing =
+                ((await store.get(`member:${coParentId}`, { type: "json" })) as string[] | null) ?? [];
+              if (!existing.includes(code)) {
+                await store.setJSON(`member:${coParentId}`, [...existing, code]);
+              }
+            }
+          }
+        }
+      }
+
+      if (!dryRun) await store.set("meta:coParentCarpoolBackfill", new Date().toISOString());
+
+      return new Response(
+        JSON.stringify({ dryRun, pairsChecked: pairs.length, asymmetricLinks, possibleDuplicates, kidsMerged, carpoolsAdded }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
     default:
       return new Response("Unknown action", { status: 400 });
   }
