@@ -67,6 +67,25 @@ function pairKey(a: string, b: string) {
   return [a, b].sort().join("|");
 }
 
+function randomCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Mirrors household.mts's lazy code generation, but run eagerly at profile
+// creation so every user has a co-parent invite code from the start instead
+// of only once they first open the invite screen.
+async function ensureHouseholdCode(store: ReturnType<typeof getStore>, memberId: string) {
+  let code = (await store.get(`household-owner:${memberId}`)) as string | null;
+  if (code) return code;
+  code = randomCode();
+  for (let i = 0; i < 10 && (await store.get(`household:${code}`)); i++) {
+    code = randomCode();
+  }
+  await store.set(`household:${code}`, memberId);
+  await store.set(`household-owner:${memberId}`, code);
+  return code;
+}
+
 // Mirrors backfillCoParentIntoCarpools in household-link.mts: retroactively
 // add the co-parent to any of ownerId's carpools where they share a kid, so
 // an admin-created link behaves the same as one a member makes themselves.
@@ -144,6 +163,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const profile: ServerProfile = { name, kids: kids ?? [], street, zip };
       await store.setJSON(`profile:${memberId}`, profile);
       await store.setJSON(`member:${memberId}`, []);
+      await ensureHouseholdCode(store, memberId);
       return new Response(JSON.stringify({ memberId }), {
         headers: { "Content-Type": "application/json" },
       });
