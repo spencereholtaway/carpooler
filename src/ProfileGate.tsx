@@ -214,8 +214,16 @@ export function ProfileGate({
             <button type="submit" className="pill-button" disabled={linkingCoParent}>
               {linkingCoParent ? "Linking..." : "Link us up →"}
             </button>
-            <button type="button" className="pill-button secondary" onClick={() => setStep(2)}>
-              Skip for now
+            <button
+              type="button"
+              className="pill-button secondary"
+              onClick={() => {
+                setWantsCoParentLink(false);
+                setCoParentCodeInput("");
+                setCoParentLinkError(null);
+              }}
+            >
+              ← Back
             </button>
           </form>
         )}
