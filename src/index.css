@@ -964,24 +964,43 @@ button {
 
 .today-carpool-header {
   display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.today-carpool-header-text {
+  display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.open-seats-badge {
+.open-seats-pill {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  margin-top: 4px;
-  padding: 2px 8px;
+  flex-shrink: 0;
+  padding: 3px 10px;
   border-radius: 999px;
-  background: var(--driving-badge-bg);
-  color: var(--driving-badge-text);
+  background: var(--accent);
+  color: var(--accent-text);
   font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.carpool-row-hint {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.open-seats-hint {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
   white-space: nowrap;
 }
 
