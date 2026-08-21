@@ -526,12 +526,14 @@ export function CarpoolDetail({
   allKids,
   onBack,
   onCarpoolUpdated,
+  onCarpoolLeft,
 }: {
   carpool: Carpool;
   memberId: string;
   allKids: string[];
   onBack: () => void;
   onCarpoolUpdated: (carpool: Carpool) => void;
+  onCarpoolLeft: (code: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [editingCarpool, setEditingCarpool] = useState(false);
@@ -550,11 +552,17 @@ export function CarpoolDetail({
     null
   );
   const [confirmingOff, setConfirmingOff] = useState(false);
+  // Deselecting every one of your kids in the edit sheet means you no longer
+  // belong to this carpool — gate that behind an explicit confirmation rather
+  // than silently zeroing your kids out while your membership row lingers.
+  const [pendingLeave, setPendingLeave] = useState(false);
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   // Both sheets get a browser-history entry so the back button / edge-swipe
   // dismisses them instead of leaving the app.
   const closeCarpoolEditor = useBackable(editingCarpool, () => setEditingCarpool(false));
   const closePendingOff = useBackable(!!pendingOff, () => setPendingOff(null));
+  const closePendingLeave = useBackable(pendingLeave, () => setPendingLeave(false));
 
   const self = carpool.members.find((m) => m.id === memberId);
   // With nobody else to coordinate with yet, "who's driving who" has only
@@ -680,6 +688,40 @@ export function CarpoolDetail({
       closeCarpoolEditor();
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Saving with no kids left selected doesn't mean "nothing arranged" — it
+  // means you're not in this carpool anymore. Confirm that before it happens
+  // instead of saving straight through.
+  const requestSaveCarpool = () => {
+    if (draftKids.length === 0) {
+      setPendingLeave(true);
+      return;
+    }
+    saveCarpool();
+  };
+
+  const confirmLeave = async () => {
+    if (!self) return;
+    setConfirmingLeave(true);
+    try {
+      const updated = await updateCarpoolSchedule(
+        carpool.code,
+        draftDay,
+        { street: draftStreet.trim(), zip: draftZip.trim() },
+        { time: draftDropOffTime, cars: carpool.dropOff?.cars ?? [] },
+        { time: draftPickUpTime, cars: carpool.pickUp?.cars ?? [] },
+        draftName.trim() || undefined,
+        draftTimezone
+      );
+      await joinCarpool(updated.code, { ...self, kids: [] });
+      onCarpoolLeft(carpool.code);
+      closePendingLeave();
+      closeCarpoolEditor();
+      onBack();
+    } finally {
+      setConfirmingLeave(false);
     }
   };
 
@@ -1022,7 +1064,7 @@ export function CarpoolDetail({
         onClose={closeCarpoolEditor}
         title="Edit carpool"
         footer={
-          <button type="button" className="pill-button" onClick={saveCarpool} disabled={saving}>
+          <button type="button" className="pill-button" onClick={requestSaveCarpool} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </button>
         }
@@ -1116,6 +1158,38 @@ export function CarpoolDetail({
           {(pendingOff?.kids.length ?? 0) > 1 ? "ride" : "rides"} with you right now. Turning this off will
           move {(pendingOff?.kids.length ?? 0) > 1 ? "them" : "them"} back to{" "}
           {(pendingOff?.kids.length ?? 0) > 1 ? "their own parents'" : "their own parent's"} car.
+        </p>
+      </BottomSheet>
+
+      <BottomSheet
+        open={pendingLeave}
+        onClose={closePendingLeave}
+        title="Leave this carpool?"
+        footer={
+          <>
+            <button
+              type="button"
+              className="pill-button"
+              onClick={closePendingLeave}
+              disabled={confirmingLeave}
+            >
+              No, go back
+            </button>
+            <button
+              type="button"
+              className="pill-button danger"
+              onClick={confirmLeave}
+              disabled={confirmingLeave}
+            >
+              {confirmingLeave ? "Leaving..." : "Yes, leave"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          You've removed all of your kids from this carpool. Saving will remove you
+          {household?.coParentId ? " (and your linked co-parent, if they're in it too)" : ""} from it.
+          {soloMember ? " Since you're the only member, this will delete the carpool entirely." : ""}
         </p>
       </BottomSheet>
     </div>

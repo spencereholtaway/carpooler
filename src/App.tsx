@@ -94,6 +94,12 @@ function App() {
     });
   };
 
+  // Drop a carpool from the cached list once we've left (or it's been
+  // deleted because we were the last member) — nothing to upsert back in.
+  const removeCarpool = (code: string) => {
+    setCarpools((prev) => (prev ? prev.filter((c) => c.code !== code) : prev));
+  };
+
   if (window.location.pathname === "/admin") {
     return <AdminPage />;
   }
@@ -164,6 +170,7 @@ function App() {
             allKids={profile.kids}
             onBack={closeCarpool}
             onCarpoolUpdated={upsertCarpool}
+            onCarpoolLeft={removeCarpool}
           />
         ) : (
           <CarpoolsPage
