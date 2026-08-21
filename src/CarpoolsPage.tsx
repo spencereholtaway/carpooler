@@ -13,12 +13,23 @@ import { useTypewriter } from "./useTypewriter";
 type DayGroup = { day: DayOfWeek | null; carpools: Carpool[] };
 
 // Flags a carpool where this member is driving with room to take on another
-// kid — an incentive to go fill it rather than a fact buried in the detail view.
-function OpenSeatsBadge({ count }: { count: number }) {
+// kid — an incentive to go fill it rather than a fact buried in the detail
+// view. The day-list row gets a quiet inline hint; the "Today" row (which
+// already carries a time badge in its header) gets a matching solid pill.
+function OpenSeatsHint({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="open-seats-badge">
-      {count} open seat{count === 1 ? "" : "s"}
+    <span className="open-seats-hint">
+      {count} seat{count === 1 ? "" : "s"} available! →
+    </span>
+  );
+}
+
+function OpenSeatsPill({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="open-seats-pill">
+      {count} seat{count === 1 ? "" : "s"} available! →
     </span>
   );
 }
@@ -56,15 +67,17 @@ function TodayCarpoolRow({
   return (
     <button className="today-carpool" onClick={onOpen}>
       <div className="today-carpool-header">
-        <span className="today-carpool-name">
-          {name}
-          {cursor(0)}
-        </span>
-        <span className="today-carpool-time">
-          {timeLine}
-          {cursor(1)}
-        </span>
-        {done && <OpenSeatsBadge count={openSeats} />}
+        <div className="today-carpool-header-text">
+          <span className="today-carpool-name">
+            {name}
+            {cursor(0)}
+          </span>
+          <span className="today-carpool-time">
+            {timeLine}
+            {cursor(1)}
+          </span>
+        </div>
+        {done && <OpenSeatsPill count={openSeats} />}
       </div>
       <div className="today-carpool-summary">
         {summaryLines.map((line, i) => (
@@ -311,13 +324,15 @@ export function CarpoolsPage({
                     <span className="carpool-row-name">{c.name}</span>
                     <span className="carpool-row-time">{rowTimeRange(c)}</span>
                   </div>
-                  <OpenSeatsBadge count={openSeatsForMember(c, memberId)} />
                   <div className="carpool-row-summary">
                     {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
                       .split("\n")
                       .map((line, i) => (
                         <p key={i}>{line}</p>
                       ))}
+                  </div>
+                  <div className="carpool-row-hint">
+                    <OpenSeatsHint count={openSeatsForMember(c, memberId)} />
                   </div>
                 </button>
               ))}
