@@ -803,9 +803,6 @@ export function AdminPage() {
                 <tr>
                   <th>Name</th>
                   <th>Kids</th>
-                  <th>Street</th>
-                  <th>Zip</th>
-                  <th>Member ID</th>
                   <th></th>
                 </tr>
               </thead>
@@ -814,9 +811,6 @@ export function AdminPage() {
                   <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
                     <td><HighlightedName name={u.name} query={userSearch} /></td>
                     <td><KidsCell user={u} users={users} /></td>
-                    <td>{u.street || "—"}</td>
-                    <td>{u.zip || "—"}</td>
-                    <td className="admin-mono">{u.memberId}</td>
                     <td>
                       <button onClick={(e) => { e.stopPropagation(); deleteUser(u.memberId); }}>Delete</button>
                     </td>
