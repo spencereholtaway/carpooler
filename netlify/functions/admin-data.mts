@@ -350,11 +350,26 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
     case "linkCoParents": {
       const { memberId, coParentId } = body.payload as { memberId: string; coParentId: string };
       if (memberId === coParentId) return new Response("Can't link a user to themselves", { status: 400 });
-      const [profileA, profileB] = await Promise.all([
+      const [profileA, profileB] = (await Promise.all([
         store.get(`profile:${memberId}`, { type: "json" }),
         store.get(`profile:${coParentId}`, { type: "json" }),
-      ]);
+      ])) as [ServerProfile | null, ServerProfile | null];
       if (!profileA || !profileB) return new Response("User not found", { status: 404 });
+
+      // backfillCoParentIntoCarpools only adds the co-parent to a carpool
+      // where their kids actually overlap the existing member's — so if
+      // one side's profile has no kids yet (e.g. a co-parent added via
+      // admin with an empty kids field), that intersection is empty and
+      // they'd never get added anywhere despite being "linked". Union the
+      // kids into both profiles first so the overlap check has something
+      // to find, mirroring the same merge profile.mts does on every save.
+      const mergedKids = Array.from(new Set([...profileA.kids, ...profileB.kids]));
+      if (mergedKids.length !== profileA.kids.length) {
+        await store.setJSON(`profile:${memberId}`, { ...profileA, kids: mergedKids });
+      }
+      if (mergedKids.length !== profileB.kids.length) {
+        await store.setJSON(`profile:${coParentId}`, { ...profileB, kids: mergedKids });
+      }
 
       await store.set(`coparent:${memberId}`, coParentId);
       await store.set(`coparent:${coParentId}`, memberId);
