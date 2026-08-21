@@ -76,11 +76,19 @@ function nameClaimKey(name: string) {
 // createUser/updateUser used to write profile:{memberId} directly without
 // ever touching it — so an admin-created (or admin-corrected) user had no
 // claim key at all, and would fail to match on sign-in, forcing a
-// duplicate profile. Never steals a name already claimed by someone else.
+// duplicate profile. Never steals a name genuinely claimed by another
+// user still on file — but a claim can point at a memberId whose profile
+// is gone (e.g. deleteUser missed it, or predates that cleanup), and a
+// dangling claim like that can never be reclaimed on its own, so this
+// self-heals by treating it as free.
 async function claimNameIfFree(store: ReturnType<typeof getStore>, name: string, memberId: string) {
   const key = nameClaimKey(name);
   const existing = await store.get(key);
-  if (!existing || existing === memberId) await store.set(key, memberId);
+  if (existing && existing !== memberId) {
+    const stillExists = await store.get(`profile:${existing}`, { type: "json" });
+    if (stillExists) return;
+  }
+  await store.set(key, memberId);
 }
 
 function randomCode() {
@@ -608,11 +616,9 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         if (!profile) continue;
         const memberId = b.key.slice("profile:".length);
         const key = nameClaimKey(profile.name);
-        const existing = await store.get(key);
-        if (!existing) {
-          await store.set(key, memberId);
-          claimed++;
-        }
+        const before = await store.get(key);
+        await claimNameIfFree(store, profile.name, memberId);
+        if ((await store.get(key)) !== before) claimed++;
       }
 
       await store.set("meta:nameClaimBackfill", new Date().toISOString());
