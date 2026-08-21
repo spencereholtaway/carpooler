@@ -1102,6 +1102,121 @@ button {
   flex: 1;
 }
 
+.recs-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.recs-banner-headline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.beta-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--driving-badge-bg);
+  color: var(--driving-badge-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recs-banner .pill-button {
+  width: 100%;
+  max-width: 280px;
+}
+
+.recs-carousel {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.rec-card {
+  flex: 0 0 84%;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(139, 123, 184, 0.25);
+  background: var(--glass-bg);
+}
+
+@media (min-width: 900px) {
+  .recs-carousel {
+    flex-direction: column;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+
+  .rec-card {
+    flex: 1 1 auto;
+  }
+}
+
+.rec-card-for {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+
+.rec-card-name {
+  font-family: var(--serif);
+  font-size: 18px;
+}
+
+.rec-card-members {
+  margin-bottom: 4px;
+}
+
+.rec-card .pill-button {
+  align-self: flex-start;
+}
+
+.rec-card-confirm-text {
+  font-size: 14px;
+}
+
+.rec-card-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.rec-card-done {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-2);
+  background: none;
+  border-style: dashed;
+}
+
+.rec-card-check {
+  color: var(--driving-badge-text);
+  font-weight: 700;
+}
+
 .calendar-subscribe-list {
   display: flex;
   flex-direction: column;

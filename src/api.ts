@@ -111,6 +111,18 @@ export async function listUpdates(): Promise<Update[]> {
   return updates;
 }
 
+export type RecommendationCard = {
+  carpoolCode: string;
+  carpoolName: string;
+  kidNames: string[];
+  memberFirstNames: string[];
+};
+
+export async function getRecommendations(memberId: string): Promise<RecommendationCard[]> {
+  const { recs } = await unwrap(await fetch(`/api/recommendations?memberId=${encodeURIComponent(memberId)}`));
+  return recs;
+}
+
 export async function updateCarpoolSchedule(
   code: string,
   day: DayOfWeek,

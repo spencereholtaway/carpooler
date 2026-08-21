@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { createCarpool, joinCarpool, listCarpools } from "./api";
+import { createCarpool, getRecommendations, joinCarpool, listCarpools, type RecommendationCard } from "./api";
 import { BottomSheet } from "./BottomSheet";
 import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
 import { formatTime, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
+import { RecommendationsSheet } from "./RecommendationsSheet";
 import { COMMON_TIMEZONES, DAYS_OF_WEEK, detectTimezone, type Carpool, type DayOfWeek } from "./types";
 import { UpdatesPage } from "./UpdatesPage";
 import type { LocalProfile } from "./useProfile";
@@ -138,6 +139,9 @@ export function CarpoolsPage({
   const [error, setError] = useState<string | null>(null);
   const joinInputRef = useRef<HTMLInputElement>(null);
 
+  const [recCards, setRecCards] = useState<RecommendationCard[]>([]);
+  const [showRecs, setShowRecs] = useState(false);
+
   useEffect(() => {
     if (openDialog === "join" && !cameViaInviteLink) joinInputRef.current?.focus();
   }, [openDialog, cameViaInviteLink]);
@@ -145,6 +149,13 @@ export function CarpoolsPage({
   useEffect(() => {
     if (carpools !== null) return;
     listCarpools(memberId).then(setCarpools);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
+
+  useEffect(() => {
+    getRecommendations(memberId)
+      .then(setRecCards)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId]);
 
@@ -294,6 +305,18 @@ export function CarpoolsPage({
         </section>
       )}
 
+      {recCards.length > 0 && (
+        <div className="recs-banner">
+          <span className="recs-banner-headline">
+            {recCards.length} recommended carpool{recCards.length === 1 ? "" : "s"}
+            <span className="beta-badge">Beta</span>
+          </span>
+          <button type="button" className="pill-button" onClick={() => setShowRecs(true)}>
+            See recommendations
+          </button>
+        </div>
+      )}
+
       <div className="section-actions">
         <button type="button" className="pill-button secondary small" onClick={openJoin}>
           Join a carpool
@@ -302,6 +325,15 @@ export function CarpoolsPage({
           Start a carpool
         </button>
       </div>
+
+      <RecommendationsSheet
+        open={showRecs}
+        onClose={() => setShowRecs(false)}
+        cards={recCards}
+        memberId={memberId}
+        profile={profile}
+        onJoined={(carpool) => setCarpools([...(carpools ?? []), carpool])}
+      />
 
       <BottomSheet
         open={openDialog === "join"}
