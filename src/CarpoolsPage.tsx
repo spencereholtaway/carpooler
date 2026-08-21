@@ -320,11 +320,11 @@ export function CarpoolsPage({
               </span>
               {dayCarpools.map((c) => (
                 <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
-                  <div className="carpool-row-content">
-                    <div className="carpool-row-top">
-                      <span className="carpool-row-name">{c.name}</span>
-                      <span className="carpool-row-time">{rowTimeRange(c)}</span>
-                    </div>
+                  <div className="carpool-row-top">
+                    <span className="carpool-row-name">{c.name}</span>
+                    <span className="carpool-row-time">{rowTimeRange(c)}</span>
+                  </div>
+                  <div className="carpool-row-summary-line">
                     <div className="carpool-row-summary">
                       {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
                         .split("\n")
@@ -332,8 +332,8 @@ export function CarpoolsPage({
                           <p key={i}>{line}</p>
                         ))}
                     </div>
+                    <OpenSeatsHint count={openSeatsFromOthers(c, memberId)} />
                   </div>
-                  <OpenSeatsHint count={openSeatsFromOthers(c, memberId)} />
                 </button>
               ))}
             </div>

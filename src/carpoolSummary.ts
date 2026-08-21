@@ -166,8 +166,10 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
 // How many free seats *other* members are offering across a leg, summed —
 // mirrors DrivingLeg's "free" calculation per car (car.seats minus kids
 // already riding who aren't that driver's own), but only counts cars this
-// member doesn't drive themselves. The point is spotting a ride you could
-// take instead of driving, not seats you're offering in your own car.
+// member doesn't drive themselves. Only evaluated at all when this member is
+// driving that same leg (see openSeatsFromOthers) — if their kid is already
+// riding with someone else, that other driver's spare seats aren't telling
+// them anything they can act on.
 function legOtherOpenSeats(leg: Leg, members: Member[], memberId: string): number {
   let total = 0;
   for (const car of leg.cars) {
@@ -179,12 +181,16 @@ function legOtherOpenSeats(leg: Leg, members: Member[], memberId: string): numbe
   return total;
 }
 
-// The most free seats other members are offering on either leg of the
-// carpool — flags that this member doesn't have to drive if they'd rather
-// not, since someone else already has room.
+// The most free seats other members are offering on a leg this member is
+// themselves driving — flags "you don't have to drive this leg, someone
+// else already has room" for the specific drive that's actually theirs to
+// give up. A leg they're not driving (their kid already has a ride, or
+// none arranged) has no driving decision to reconsider, so it's skipped
+// even if some other car on it happens to have room.
 export function openSeatsFromOthers(carpool: Carpool, memberId: string): number {
+  const selfDrives = (leg: Leg) => leg.cars.some((c) => c.driverId === memberId);
   return Math.max(
-    legOtherOpenSeats(carpool.dropOff, carpool.members, memberId),
-    legOtherOpenSeats(carpool.pickUp, carpool.members, memberId)
+    selfDrives(carpool.dropOff) ? legOtherOpenSeats(carpool.dropOff, carpool.members, memberId) : 0,
+    selfDrives(carpool.pickUp) ? legOtherOpenSeats(carpool.pickUp, carpool.members, memberId) : 0
   );
 }
