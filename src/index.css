@@ -888,9 +888,10 @@ button {
 
 .carpool-row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 18px 20px;
   border-radius: 18px;
   border: 1px solid var(--glass-border);
@@ -905,6 +906,15 @@ button {
 .carpool-row:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 34px rgba(139, 123, 184, 0.16);
+}
+
+.carpool-row-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .carpool-row-top {
@@ -993,12 +1003,8 @@ button {
   white-space: nowrap;
 }
 
-.carpool-row-hint {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .open-seats-hint {
+  flex-shrink: 0;
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 600;

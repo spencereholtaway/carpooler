@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createCarpool, getRecommendations, joinCarpool, listCarpools, type RecommendationCard } from "./api";
 import { BottomSheet } from "./BottomSheet";
 import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
-import { formatTime, openSeatsForMember, summarizeCarpool } from "./carpoolSummary";
+import { formatTime, openSeatsFromOthers, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { RecommendationsSheet } from "./RecommendationsSheet";
 import { COMMON_TIMEZONES, DAYS_OF_WEEK, detectTimezone, type Carpool, type DayOfWeek } from "./types";
@@ -301,7 +301,7 @@ export function CarpoolsPage({
               key={c.code}
               carpool={c}
               summary={summarizeCarpool(c, memberId) || "Nothing arranged yet."}
-              openSeats={openSeatsForMember(c, memberId)}
+              openSeats={openSeatsFromOthers(c, memberId)}
               onOpen={() => onOpenCarpool(c)}
               start={i <= typedCount}
               onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
@@ -320,20 +320,20 @@ export function CarpoolsPage({
               </span>
               {dayCarpools.map((c) => (
                 <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
-                  <div className="carpool-row-top">
-                    <span className="carpool-row-name">{c.name}</span>
-                    <span className="carpool-row-time">{rowTimeRange(c)}</span>
+                  <div className="carpool-row-content">
+                    <div className="carpool-row-top">
+                      <span className="carpool-row-name">{c.name}</span>
+                      <span className="carpool-row-time">{rowTimeRange(c)}</span>
+                    </div>
+                    <div className="carpool-row-summary">
+                      {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
+                        .split("\n")
+                        .map((line, i) => (
+                          <p key={i}>{line}</p>
+                        ))}
+                    </div>
                   </div>
-                  <div className="carpool-row-summary">
-                    {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
-                      .split("\n")
-                      .map((line, i) => (
-                        <p key={i}>{line}</p>
-                      ))}
-                  </div>
-                  <div className="carpool-row-hint">
-                    <OpenSeatsHint count={openSeatsForMember(c, memberId)} />
-                  </div>
+                  <OpenSeatsHint count={openSeatsFromOthers(c, memberId)} />
                 </button>
               ))}
             </div>
