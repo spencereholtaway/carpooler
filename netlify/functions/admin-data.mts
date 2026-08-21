@@ -149,6 +149,42 @@ async function backfillCoParentIntoCarpools(
   }
 }
 
+// Mirrors autoAddCoParent in carpools-join.mts/carpools.mts: when a member
+// is added to ONE carpool (as opposed to backfillCoParentIntoCarpools
+// above, which syncs ALL of an owner's carpools at link time), add their
+// linked co-parent too if they share one of the kids just assigned — so
+// admin's addMember behaves the same as a member joining themselves.
+async function autoAddCoParentToCarpool(
+  store: ReturnType<typeof getStore>,
+  carpool: Carpool,
+  actingMemberId: string,
+  assignedKids: string[]
+) {
+  const coParentId = (await store.get(`coparent:${actingMemberId}`)) as string | null;
+  if (!coParentId || carpool.members.some((m) => m.id === coParentId)) return;
+
+  const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
+  if (!coProfile) return;
+
+  const sharedKids = assignedKids.filter((k) => coProfile.kids.includes(k));
+  if (sharedKids.length === 0) return;
+
+  carpool.members.push({
+    id: coParentId,
+    name: coProfile.name,
+    kids: sharedKids,
+    canDriveDropOff: false,
+    canDrivePickUp: false,
+    street: coProfile.street,
+    zip: coProfile.zip,
+  });
+
+  const existing = ((await store.get(`member:${coParentId}`, { type: "json" })) as string[] | null) ?? [];
+  if (!existing.includes(carpool.code)) {
+    await store.setJSON(`member:${coParentId}`, [...existing, carpool.code]);
+  }
+}
+
 async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId: string, code: string) {
   const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
   await store.setJSON(`member:${memberId}`, codes.filter((c) => c !== code));
@@ -470,6 +506,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         street: profile.street,
         zip: profile.zip,
       });
+      await autoAddCoParentToCarpool(store, carpool, memberId, profile.kids);
       await store.setJSON(`code:${code}`, carpool);
 
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
