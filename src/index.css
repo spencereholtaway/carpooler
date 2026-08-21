@@ -3327,13 +3327,18 @@ button {
   border: none;
   background: none;
   color: var(--admin-text-muted-2);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
   cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .admin-dataviz-toggle-menu-chevron:hover {
   color: var(--admin-text);
+}
+
+.admin-dataviz-toggle-menu-chevron.open {
+  transform: rotate(180deg);
 }
 
 .admin-dataviz-toggle-menu {
@@ -3345,7 +3350,7 @@ button {
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 8px 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 20px var(--admin-panel-shadow);
   white-space: nowrap;
 }
 
