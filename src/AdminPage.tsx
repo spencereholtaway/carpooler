@@ -642,6 +642,7 @@ export function AdminPage() {
   const deleteUser = async (memberId: string) => {
     if (!confirm("Delete this user? This removes them from any carpools too.")) return;
     await callAdmin("deleteUser", { memberId });
+    setEditingUser(null);
   };
 
   const [coParentSelection, setCoParentSelection] = useState("");
@@ -803,7 +804,6 @@ export function AdminPage() {
                 <tr>
                   <th>Name</th>
                   <th>Kids</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -834,15 +834,6 @@ export function AdminPage() {
                             ))}
                           </div>
                         )}
-                      </td>
-                      <td>
-                        <div className="admin-row-actions">
-                          {group.map((u) => (
-                            <button key={u.memberId} onClick={() => deleteUser(u.memberId)}>
-                              Delete{group.length > 1 ? ` ${u.name}` : ""}
-                            </button>
-                          ))}
-                        </div>
                       </td>
                     </tr>
                   );
@@ -966,7 +957,8 @@ export function AdminPage() {
             <button onClick={saveUser} disabled={savingUser}>
               {savingUser ? "Saving..." : "Save"}
             </button>{" "}
-            <button onClick={() => setEditingUser(null)}>Cancel</button>
+            <button onClick={() => setEditingUser(null)}>Cancel</button>{" "}
+            <button onClick={() => editingUser && deleteUser(editingUser)}>Delete</button>
           </>
         }
       >

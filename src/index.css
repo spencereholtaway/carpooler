@@ -2513,12 +2513,6 @@ button {
   text-decoration: underline;
 }
 
-.admin-row-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .admin-mono {
   font-family: ui-monospace, monospace;
   font-size: 12px;
