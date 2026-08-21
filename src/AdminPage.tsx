@@ -1246,7 +1246,7 @@ export function AdminPage() {
       <SidePanel
         open={editingCarpool !== null}
         onClose={() => setEditingCarpool(null)}
-        title="Edit carpool"
+        title={carpoolDraft ? `Edit ${carpoolDraft.name}` : "Edit carpool"}
         footer={
           <>
             <button onClick={saveCarpool} disabled={savingCarpool}>
