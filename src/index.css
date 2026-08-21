@@ -11,6 +11,7 @@
   --bg-rgb: 251, 248, 245;
   --driving-badge-bg: rgba(130, 168, 148, 0.18);
   --driving-badge-text: #4c7360;
+  --open-seats-pill-bg: #8b7bb8;
 
   /* frosted-glass surfaces used across cards/sheets/dialogs */
   --glass-bg: rgba(255, 255, 255, 0.6);
@@ -72,6 +73,7 @@
     --bg-rgb: 26, 22, 32;
     --driving-badge-bg: rgba(130, 200, 168, 0.16);
     --driving-badge-text: #8fd6ac;
+    --open-seats-pill-bg: #6d5aa0;
 
     --glass-bg: rgba(45, 39, 56, 0.6);
     --glass-bg-strong: rgba(45, 39, 56, 0.72);
@@ -983,8 +985,8 @@ button {
   flex-shrink: 0;
   padding: 3px 10px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--open-seats-pill-bg);
+  color: #fff;
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 600;
