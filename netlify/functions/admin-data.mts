@@ -311,6 +311,14 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         dropMember(carpool, memberId);
         await store.setJSON(`code:${code}`, carpool);
       }
+      const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
+      if (profile) {
+        // Otherwise a dangling name:{name} claim points at a memberId that
+        // no longer exists, so a matching duplicate (or the person signing
+        // in again) can never claim it back on sign-in.
+        const key = nameClaimKey(profile.name);
+        if ((await store.get(key)) === memberId) await store.delete(key);
+      }
       await store.delete(`profile:${memberId}`);
       await store.delete(`member:${memberId}`);
       return new Response("ok");
