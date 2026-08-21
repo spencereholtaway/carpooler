@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createCarpool, getRecommendations, joinCarpool, listCarpools, type RecommendationCard } from "./api";
 import { BottomSheet } from "./BottomSheet";
 import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
-import { formatTime, summarizeCarpool } from "./carpoolSummary";
+import { formatTime, openSeatsForMember, summarizeCarpool } from "./carpoolSummary";
 import { KidPicker } from "./KidPicker";
 import { RecommendationsSheet } from "./RecommendationsSheet";
 import { COMMON_TIMEZONES, DAYS_OF_WEEK, detectTimezone, type Carpool, type DayOfWeek } from "./types";
@@ -12,9 +12,21 @@ import { useTypewriter } from "./useTypewriter";
 
 type DayGroup = { day: DayOfWeek | null; carpools: Carpool[] };
 
+// Flags a carpool where this member is driving with room to take on another
+// kid — an incentive to go fill it rather than a fact buried in the detail view.
+function OpenSeatsBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="open-seats-badge">
+      {count} open seat{count === 1 ? "" : "s"}
+    </span>
+  );
+}
+
 function TodayCarpoolRow({
   carpool,
   summary,
+  openSeats,
   onOpen,
   start,
   onDone,
@@ -22,6 +34,7 @@ function TodayCarpoolRow({
 }: {
   carpool: Carpool;
   summary: string;
+  openSeats: number;
   onOpen: () => void;
   start: boolean;
   onDone: () => void;
@@ -51,6 +64,7 @@ function TodayCarpoolRow({
           {timeLine}
           {cursor(1)}
         </span>
+        {done && <OpenSeatsBadge count={openSeats} />}
       </div>
       <div className="today-carpool-summary">
         {summaryLines.map((line, i) => (
@@ -274,6 +288,7 @@ export function CarpoolsPage({
               key={c.code}
               carpool={c}
               summary={summarizeCarpool(c, memberId) || "Nothing arranged yet."}
+              openSeats={openSeatsForMember(c, memberId)}
               onOpen={() => onOpenCarpool(c)}
               start={i <= typedCount}
               onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
@@ -296,6 +311,7 @@ export function CarpoolsPage({
                     <span className="carpool-row-name">{c.name}</span>
                     <span className="carpool-row-time">{rowTimeRange(c)}</span>
                   </div>
+                  <OpenSeatsBadge count={openSeatsForMember(c, memberId)} />
                   <div className="carpool-row-summary">
                     {(summarizeCarpool(c, memberId) || "Nothing arranged yet.")
                       .split("\n")
