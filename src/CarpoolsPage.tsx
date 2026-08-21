@@ -271,7 +271,9 @@ export function CarpoolsPage({
         <section className="carpools-list">
           {dayGroups.map(({ day, carpools: dayCarpools }) => (
             <div className="carpool-day-group" key={day ?? "no-day"}>
-              <span className="carpool-row-meta carpool-day-label">{day ?? "No day set"}</span>
+              <span className="carpool-row-meta carpool-day-label">
+                {day ? `Every ${day}` : "No day set"}
+              </span>
               {dayCarpools.map((c) => (
                 <button key={c.code} className="carpool-row" onClick={() => onOpenCarpool(c)}>
                   <div className="carpool-row-top">

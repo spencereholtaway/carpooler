@@ -9,9 +9,19 @@ const stack: StackEntry[] = [];
 let seq = 0;
 
 if (typeof window !== "undefined") {
-  window.addEventListener("popstate", () => {
-    const top = stack.pop();
-    if (top) top.close();
+  window.addEventListener("popstate", (e) => {
+    // One navigation event can skip past more than one open layer at once —
+    // e.g. a caller closing three nested sheets back-to-back in the same
+    // tick (confirm sheet -> edit sheet -> the screen under them) may only
+    // produce one or two actual popstate events instead of three, since
+    // browsers are free to coalesce rapid history.back() calls. Close
+    // everything whose entry sits above wherever we actually landed, not
+    // just the single top of the stack, so nothing gets left stranded open.
+    const targetId = (e.state as { backableId?: number } | null)?.backableId ?? 0;
+    while (stack.length > 0 && stack[stack.length - 1].id > targetId) {
+      const top = stack.pop()!;
+      top.close();
+    }
   });
 }
 
