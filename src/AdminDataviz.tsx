@@ -831,6 +831,9 @@ function buildBlob(homePoints: MapPoint[], opts?: { fillOpacity?: number; weight
     weight: opts?.weight ?? 1,
     fillColor: "#2563eb",
     fillOpacity: opts?.fillOpacity ?? 0.2,
+    // Purely decorative — without this the blob (painted after the
+    // markers) swallows hover/click events meant for the dots beneath it.
+    interactive: false,
   };
   if (homePoints.length < 3) {
     const latlngs = homePoints.map((h) => L.latLng(h.point.lat, h.point.lon));
