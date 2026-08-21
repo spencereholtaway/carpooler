@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CapacityChangeBanner } from "./CapacityChangeBanner";
 import "./index.css";
 import { useBackable } from "./useBackable";
 import { useProfile } from "./useProfile";
@@ -162,7 +161,6 @@ function App() {
         </div>
       </div>
       <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
-        <CapacityChangeBanner />
         {selectedCarpool ? (
           <CarpoolDetail
             carpool={selectedCarpool}

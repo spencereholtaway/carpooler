@@ -259,7 +259,12 @@ export function CarpoolsPage({
     <div className="carpools-page">
       {loading && <p className="muted">Loading...</p>}
 
-      {carpools?.length === 0 && <p className="muted">No carpools yet.</p>}
+      {carpools?.length === 0 && (
+        <div className="carpools-empty">
+          <h2>No carpools yet</h2>
+          <p>Ask someone you know is blisspooling for a join code, or start your own.</p>
+        </div>
+      )}
 
       {!loading && todayCarpools.length > 0 && (
         <section className="today-summary">
