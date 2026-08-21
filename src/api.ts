@@ -88,7 +88,13 @@ export async function setHouseholdCombined(
 export async function linkHousehold(
   code: string,
   memberId: string
-): Promise<{ coParentId: string; coParentName: string | null; coParentKids: string[] }> {
+): Promise<{
+  coParentId: string;
+  coParentName: string | null;
+  coParentKids: string[];
+  coParentStreet: string | null;
+  coParentZip: string | null;
+}> {
   return unwrap(
     await fetch("/api/household/link", {
       method: "POST",

@@ -89,6 +89,8 @@ export default async (req: Request) => {
       coParentId: inviterId,
       coParentName: inviterProfile?.name ?? null,
       coParentKids: inviterProfile?.kids ?? [],
+      coParentStreet: inviterProfile?.street ?? null,
+      coParentZip: inviterProfile?.zip ?? null,
     }),
     { headers: { "Content-Type": "application/json" } }
   );
