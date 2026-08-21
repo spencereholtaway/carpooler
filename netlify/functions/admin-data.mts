@@ -67,6 +67,22 @@ function pairKey(a: string, b: string) {
   return [a, b].sort().join("|");
 }
 
+function nameClaimKey(name: string) {
+  return `name:${name.trim().toLowerCase()}`;
+}
+
+// Mirrors claim-name.mts's own claim logic. Sign-in matches a typed name
+// against this name:{trimmed-lowercased} -> memberId index, but admin's
+// createUser/updateUser used to write profile:{memberId} directly without
+// ever touching it — so an admin-created (or admin-corrected) user had no
+// claim key at all, and would fail to match on sign-in, forcing a
+// duplicate profile. Never steals a name already claimed by someone else.
+async function claimNameIfFree(store: ReturnType<typeof getStore>, name: string, memberId: string) {
+  const key = nameClaimKey(name);
+  const existing = await store.get(key);
+  if (!existing || existing === memberId) await store.set(key, memberId);
+}
+
 function randomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -164,14 +180,22 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await store.setJSON(`profile:${memberId}`, profile);
       await store.setJSON(`member:${memberId}`, []);
       await ensureHouseholdCode(store, memberId);
+      await claimNameIfFree(store, name, memberId);
       return new Response(JSON.stringify({ memberId }), {
         headers: { "Content-Type": "application/json" },
       });
     }
     case "updateUser": {
       const { memberId, name, kids, street, zip } = body.payload;
+      const oldProfile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
       const profile: ServerProfile = { name, kids, street, zip };
       await store.setJSON(`profile:${memberId}`, profile);
+
+      if (oldProfile && nameClaimKey(oldProfile.name) !== nameClaimKey(name)) {
+        const oldKey = nameClaimKey(oldProfile.name);
+        if ((await store.get(oldKey)) === memberId) await store.delete(oldKey);
+      }
+      await claimNameIfFree(store, name, memberId);
 
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
       for (const code of codes) {
@@ -550,6 +574,41 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
       await store.set("meta:timezoneBackfill", new Date().toISOString());
       return new Response(JSON.stringify({ updated }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    // One-time backfill for users whose profile was created or last edited
+    // through the admin panel before createUser/updateUser started keeping
+    // the name:{name} sign-in claim key in sync. Without that key, sign-in
+    // (claim-name.mts) can't match the typed name back to this memberId, so
+    // it silently creates a duplicate profile instead of recognizing the
+    // returning user. Idempotent like backfillTimezone: records itself
+    // under "meta:nameClaimBackfill" and no-ops on a second run unless
+    // forced. Never overwrites a claim already held by a different member.
+    case "backfillNameClaims": {
+      const already = (await store.get("meta:nameClaimBackfill")) as string | null;
+      if (already && !body.payload?.force) {
+        return new Response(JSON.stringify({ skipped: true, ranAt: already }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const { blobs: profileBlobs } = await store.list({ prefix: "profile:" });
+      let claimed = 0;
+      for (const b of profileBlobs) {
+        const profile = (await store.get(b.key, { type: "json" })) as ServerProfile | null;
+        if (!profile) continue;
+        const memberId = b.key.slice("profile:".length);
+        const key = nameClaimKey(profile.name);
+        const existing = await store.get(key);
+        if (!existing) {
+          await store.set(key, memberId);
+          claimed++;
+        }
+      }
+
+      await store.set("meta:nameClaimBackfill", new Date().toISOString());
+      return new Response(JSON.stringify({ claimed }), {
         headers: { "Content-Type": "application/json" },
       });
     }
