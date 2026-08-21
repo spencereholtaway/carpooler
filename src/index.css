@@ -3281,11 +3281,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--admin-surface);
 }
 
 .admin-dataviz-map-wrapper:fullscreen {
   padding: 12px;
+  background: var(--admin-surface);
 }
 
 .admin-dataviz-map-controls {
