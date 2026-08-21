@@ -565,8 +565,9 @@ export default async (req: Request) => {
           coParentName = coProfile?.name ?? null;
           householdCombined = (await store.get(`combined:${pairKey(memberId, coParentId)}`)) === "true";
         }
+        const coParentCode = (await store.get(`household-owner:${memberId}`)) as string | null;
 
-        return { memberId, ...profile, coParentId, coParentName, householdCombined };
+        return { memberId, ...profile, coParentId, coParentName, householdCombined, coParentCode };
       })
     )
   ).filter(Boolean);

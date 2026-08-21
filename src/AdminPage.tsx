@@ -12,6 +12,7 @@ type AdminUser = {
   coParentId?: string | null;
   coParentName?: string | null;
   householdCombined?: boolean;
+  coParentCode?: string | null;
 };
 
 type AdminMember = {
@@ -1052,6 +1053,14 @@ export function AdminPage() {
             {liveEditingUser && (
               <div className="admin-panel-household">
                 <h4>Co-parent household</h4>
+                <p>
+                  Invite code:{" "}
+                  {liveEditingUser.coParentCode ? (
+                    <CopyableCode value={liveEditingUser.coParentCode} />
+                  ) : (
+                    "Not generated yet"
+                  )}
+                </p>
                 {liveEditingUser.coParentId ? (
                   <>
                     <p>
