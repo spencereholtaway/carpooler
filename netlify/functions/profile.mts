@@ -43,6 +43,24 @@ export default async (req: Request) => {
     const { memberId, profile } = (await req.json()) as { memberId?: string; profile?: ServerProfile };
     if (!memberId || !profile) return new Response("Missing fields", { status: 400 });
 
+    // Kids are only ever merged into a co-parent's profile once, at initial
+    // link time (household-link.mts) — a kid added afterward by either
+    // parent never reached the other, so co-parents' kid lists silently
+    // drifted apart. Re-merge (union, never drop a kid either side already
+    // has) on every save so a kid added by one parent always shows up for
+    // the other too.
+    const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
+    if (coParentId) {
+      const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
+      if (coProfile) {
+        const mergedKids = Array.from(new Set([...profile.kids, ...coProfile.kids]));
+        profile.kids = mergedKids;
+        if (mergedKids.length !== coProfile.kids.length) {
+          await store.setJSON(`profile:${coParentId}`, { ...coProfile, kids: mergedKids });
+        }
+      }
+    }
+
     await store.setJSON(`profile:${memberId}`, profile);
     await ensureHouseholdCode(store, memberId);
 

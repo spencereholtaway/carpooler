@@ -197,6 +197,22 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const { memberId, name, kids, street, zip } = body.payload;
       const oldProfile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
       const profile: ServerProfile = { name, kids, street, zip };
+
+      // Mirrors the merge in profile.mts's POST handler: a kid added here
+      // should also reach a linked co-parent's profile, and vice versa,
+      // instead of only ever merging once at initial link time.
+      const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
+      if (coParentId) {
+        const coProfile = (await store.get(`profile:${coParentId}`, { type: "json" })) as ServerProfile | null;
+        if (coProfile) {
+          const mergedKids = Array.from(new Set([...profile.kids, ...coProfile.kids]));
+          profile.kids = mergedKids;
+          if (mergedKids.length !== coProfile.kids.length) {
+            await store.setJSON(`profile:${coParentId}`, { ...coProfile, kids: mergedKids });
+          }
+        }
+      }
+
       await store.setJSON(`profile:${memberId}`, profile);
 
       if (oldProfile && nameClaimKey(oldProfile.name) !== nameClaimKey(name)) {
