@@ -1496,7 +1496,7 @@ export function AdminDatavizPanel({
                           </label>
                           <button
                             type="button"
-                            className="admin-dataviz-toggle-menu-chevron"
+                            className={`admin-dataviz-toggle-menu-chevron${blobMenuOpen ? " open" : ""}`}
                             aria-label="Heatmap options"
                             aria-expanded={blobMenuOpen}
                             onClick={() => setBlobMenuOpen((o) => !o)}
