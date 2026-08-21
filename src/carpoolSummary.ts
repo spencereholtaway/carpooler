@@ -163,25 +163,28 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
     .join("\n");
 }
 
-// How many free seats this member is offering in their own car, per leg —
-// mirrors DrivingLeg's "free" calculation (car.seats minus other members'
-// kids already riding along; the driver's own kids don't count against it).
-// Not driving a leg at all (no car entry) reads as zero, same as there.
-function legOpenSeats(leg: Leg, memberId: string, selfKids: Set<string>): number {
-  const car = leg.cars.find((c) => c.driverId === memberId);
-  if (!car) return 0;
-  const otherKidsInCar = car.kids.filter((k) => !selfKids.has(k)).length;
-  return Math.max(car.seats - otherKidsInCar, 0);
+// How many free seats *other* members are offering across a leg, summed —
+// mirrors DrivingLeg's "free" calculation per car (car.seats minus kids
+// already riding who aren't that driver's own), but only counts cars this
+// member doesn't drive themselves. The point is spotting a ride you could
+// take instead of driving, not seats you're offering in your own car.
+function legOtherOpenSeats(leg: Leg, members: Member[], memberId: string): number {
+  let total = 0;
+  for (const car of leg.cars) {
+    if (car.driverId === memberId) continue;
+    const driverKids = new Set(members.find((m) => m.id === car.driverId)?.kids ?? []);
+    const otherKidsInCar = car.kids.filter((k) => !driverKids.has(k)).length;
+    total += Math.max(car.seats - otherKidsInCar, 0);
+  }
+  return total;
 }
 
-// The most free seats this member is offering on either leg of the carpool —
-// used to flag carpools where they could still take on another kid.
-export function openSeatsForMember(carpool: Carpool, memberId: string): number {
-  const self = carpool.members.find((m) => m.id === memberId);
-  if (!self) return 0;
-  const selfKids = new Set(self.kids);
+// The most free seats other members are offering on either leg of the
+// carpool — flags that this member doesn't have to drive if they'd rather
+// not, since someone else already has room.
+export function openSeatsFromOthers(carpool: Carpool, memberId: string): number {
   return Math.max(
-    legOpenSeats(carpool.dropOff, memberId, selfKids),
-    legOpenSeats(carpool.pickUp, memberId, selfKids)
+    legOtherOpenSeats(carpool.dropOff, carpool.members, memberId),
+    legOtherOpenSeats(carpool.pickUp, carpool.members, memberId)
   );
 }
