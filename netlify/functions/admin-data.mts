@@ -514,6 +514,69 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
       return new Response("ok");
     }
+    // Toggles one kid on/off for a household (a parent, or a linked
+    // co-parent pair passed together as memberIds) within one carpool —
+    // the admin-panel equivalent of a member editing their own kids in
+    // CarpoolDetail, but usable without the household ever having signed
+    // in themselves. Turning on prefers whichever household member is
+    // already a carpool member (adding the kid to their row); if neither
+    // is a member yet, adds the first id as a new member seeded with just
+    // this kid, then mirrors autoAddCoParentToCarpool so a linked
+    // co-parent who shares the kid gets pulled in too. Turning off strips
+    // the kid from every household member's row and un-assigns them from
+    // both legs' cars, but leaves member rows in place even if their kids
+    // list goes empty, matching CarpoolDetail's own save-with-no-kids
+    // behavior.
+    case "toggleHouseholdKid": {
+      const { code, memberIds, kid, on } = body.payload as {
+        code: string;
+        memberIds: string[];
+        kid: string;
+        on: boolean;
+      };
+      if (!code || !memberIds?.length || !kid) return new Response("Invalid payload", { status: 400 });
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      if (!carpool) return new Response("Not found", { status: 404 });
+      carpool.dropOff ??= { time: "", cars: [] };
+      carpool.pickUp ??= { time: "", cars: [] };
+
+      if (!on) {
+        for (const m of carpool.members) {
+          if (memberIds.includes(m.id)) m.kids = m.kids.filter((k) => k !== kid);
+        }
+        for (const leg of [carpool.dropOff, carpool.pickUp]) {
+          leg.cars = (leg.cars ?? []).map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
+        }
+        await store.setJSON(`code:${code}`, carpool);
+        return new Response("ok");
+      }
+
+      const existingMember = carpool.members.find((m) => memberIds.includes(m.id));
+      let actingMemberId = existingMember?.id ?? memberIds[0];
+      if (existingMember) {
+        if (!existingMember.kids.includes(kid)) existingMember.kids = [...existingMember.kids, kid];
+      } else {
+        const memberId = memberIds[0];
+        const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
+        if (!profile) return new Response("User not found", { status: 404 });
+        carpool.members.push({
+          id: memberId,
+          name: profile.name,
+          kids: [kid],
+          canDriveDropOff: false,
+          canDrivePickUp: false,
+          street: profile.street,
+          zip: profile.zip,
+        });
+        const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+        if (!codes.includes(code)) await store.setJSON(`member:${memberId}`, [...codes, code]);
+        actingMemberId = memberId;
+      }
+
+      await autoAddCoParentToCarpool(store, carpool, actingMemberId, [kid]);
+      await store.setJSON(`code:${code}`, carpool);
+      return new Response("ok");
+    }
     case "removeMember": {
       const { code, memberId } = body.payload;
       const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;

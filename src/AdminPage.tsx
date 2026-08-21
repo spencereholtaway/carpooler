@@ -751,6 +751,7 @@ export function AdminPage() {
       pickUp: { time: c.pickUp?.time ?? "", cars: c.pickUp?.cars ?? [] },
     });
     setAddMemberSelection("");
+    setHouseholdKidSearch("");
     setLegTab("dropOff");
     setLegViewMode("kid");
   };
@@ -797,6 +798,10 @@ export function AdminPage() {
       setAddingMember(false);
     }
   };
+
+  const toggleHouseholdKid = (code: string, memberIds: string[], kid: string, on: boolean) =>
+    callAdmin("toggleHouseholdKid", { code, memberIds, kid, on });
+  const [householdKidSearch, setHouseholdKidSearch] = useState("");
 
   // The panel's carpool data needs to reflect the latest load (e.g. after
   // adding/removing a member), not the stale snapshot captured when it opened.
@@ -1355,6 +1360,49 @@ export function AdminPage() {
                   {addingMember ? "Adding..." : "Add"}
                 </button>
               </div>
+            </div>
+
+            <div className="admin-panel-members admin-panel-household-kids">
+              <h4>Kids in this carpool</h4>
+              <input
+                type="search"
+                className="admin-search-input"
+                placeholder="Search parents..."
+                value={householdKidSearch}
+                onChange={(e) => setHouseholdKidSearch(e.target.value)}
+              />
+              {filterUserGroups(groupUsersByCoParent(users), householdKidSearch).map((group) => {
+                const kids = combinedKids(group);
+                if (kids.length === 0) return null;
+                const memberIds = group.map((u) => u.memberId);
+                return (
+                  <div key={memberIds.join("-")} className="admin-household-kid-row">
+                    <span className="admin-household-name">
+                      {group.map((u) => u.name).join(" & ")}
+                    </span>
+                    <div className="kid-tags">
+                      {kids.map((kid) => {
+                        const active = liveEditingCarpool.members.some(
+                          (m) => memberIds.includes(m.id) && m.kids.includes(kid)
+                        );
+                        return (
+                          <button
+                            type="button"
+                            key={kid}
+                            className={`kid-pick ${active ? "active" : ""}`}
+                            aria-pressed={active}
+                            onClick={() =>
+                              toggleHouseholdKid(liveEditingCarpool.code, memberIds, kid, !active)
+                            }
+                          >
+                            {kid}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="admin-panel-driving">

@@ -2784,6 +2784,38 @@ button {
   padding-top: 14px;
 }
 
+.admin-panel-household-kids {
+  border-top: 1px solid var(--admin-border-soft);
+  padding-top: 14px;
+}
+
+.admin-panel-household-kids .admin-search-input {
+  width: 100%;
+  margin: 4px 0 12px;
+}
+
+.admin-household-kid-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--admin-border-soft);
+}
+
+.admin-household-kid-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.admin-household-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.admin-household-kid-row .kid-tags {
+  justify-content: flex-start;
+}
+
 .admin-leg-tabs-row {
   display: flex;
   align-items: center;
