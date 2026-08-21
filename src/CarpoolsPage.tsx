@@ -164,7 +164,7 @@ export function CarpoolsPage({
   const openJoin = () => {
     setError(null);
     setJoinCode("");
-    setSelectedKids(profile.kids);
+    setSelectedKids([]);
     setOpenDialog("join");
   };
 
@@ -176,7 +176,7 @@ export function CarpoolsPage({
     setDestZip("");
     setDropOffTime("");
     setPickUpTime("");
-    setSelectedKids(profile.kids);
+    setSelectedKids([]);
     setOpenDialog("create");
   };
 
@@ -308,7 +308,12 @@ export function CarpoolsPage({
         onClose={() => setOpenDialog(null)}
         title="Join a carpool"
         footer={
-          <button type="button" className="pill-button" onClick={handleJoin} disabled={joining}>
+          <button
+            type="button"
+            className="pill-button"
+            onClick={handleJoin}
+            disabled={joining || selectedKids.length === 0}
+          >
             {joining ? "Joining..." : "Join"}
           </button>
         }
