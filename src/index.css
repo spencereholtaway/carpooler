@@ -3302,18 +3302,6 @@ button {
   gap: 12px;
 }
 
-.admin-dataviz-toggle-group button {
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 10px;
-  border: 1px solid var(--admin-border);
-  border-radius: 999px;
-  background: var(--admin-surface-2);
-  color: var(--admin-text-muted-2);
-  cursor: pointer;
-}
-
 .admin-dataviz-graph-toggle {
   display: flex;
   align-items: center;
