@@ -63,16 +63,64 @@ function rankNameMatch(name: string, query: string): number | null {
   return null;
 }
 
-// Filters + orders a list by the same word-match ranking NameAutosuggest
-// uses, so table search behaves consistently with the lookup dropdowns.
-function filterByName<T>(items: T[], query: string, getName: (item: T) => string): T[] {
+// Ranks a value's match quality against a query: a word-start hit (e.g.
+// matching "Hol" in "Holtaway") outranks a plain mid-word substring hit,
+// and no match at all returns null. Case-insensitive.
+function fieldMatchQuality(value: string, query: string): 0 | 1 | null {
+  if (!value) return null;
+  const lower = value.toLowerCase();
+  if (!lower.includes(query)) return null;
+  const words = lower.split(/\s+/).filter(Boolean);
+  return words.some((w) => w.startsWith(query)) ? 0 : 1;
+}
+
+// Table search spans every visible column, but ranks hits by field
+// priority first (e.g. a name match always outranks an address match)
+// and match quality second (word-start beats mid-word substring) — so
+// the most identifying field wins ties within the same priority tier.
+function rankFields(fields: { value: string; priority: number }[], query: string): number | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  let best: number | null = null;
+  for (const { value, priority } of fields) {
+    const quality = fieldMatchQuality(value, q);
+    if (quality === null) continue;
+    const rank = priority * 2 + quality;
+    if (best === null || rank < best) best = rank;
+  }
+  return best;
+}
+
+function findSubstringMatches(value: string, query: string): number[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const lower = value.toLowerCase();
+  const indices: number[] = [];
+  let from = 0;
+  while (from <= lower.length - q.length) {
+    const found = lower.indexOf(q, from);
+    if (found === -1) break;
+    indices.push(found);
+    from = found + q.length;
+  }
+  return indices;
+}
+
+// Like HighlightedName, but highlights any substring match (not just
+// word-start ones), since table search now matches mid-word too.
+function HighlightedText({ text, query }: { text: string; query: string }) {
   const q = query.trim();
-  if (!q) return items;
-  return items
-    .map((item) => ({ item, rank: rankNameMatch(getName(item), q) }))
-    .filter((r): r is { item: T; rank: number } => r.rank !== null)
-    .sort((a, b) => a.rank - b.rank || getName(a.item).localeCompare(getName(b.item)))
-    .map((r) => r.item);
+  const matches = findSubstringMatches(text, q);
+  if (matches.length === 0) return <>{text}</>;
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  matches.forEach((idx, i) => {
+    parts.push(text.slice(cursor, idx));
+    parts.push(<mark key={i} className="admin-search-match">{text.slice(idx, idx + q.length)}</mark>);
+    cursor = idx + q.length;
+  });
+  parts.push(text.slice(cursor));
+  return <>{parts}</>;
 }
 
 // Mirrors rankNameMatch: only a match at the start of a word (first name,
@@ -101,7 +149,7 @@ function HighlightedName({ name, query }: { name: string; query: string }) {
   let cursor = 0;
   matches.forEach((idx, i) => {
     parts.push(name.slice(cursor, idx));
-    parts.push(<strong key={i}>{name.slice(idx, idx + q.length)}</strong>);
+    parts.push(<mark key={i} className="admin-search-match">{name.slice(idx, idx + q.length)}</mark>);
     cursor = idx + q.length;
   });
   parts.push(name.slice(cursor));
@@ -163,19 +211,47 @@ function groupAddressLines(group: AdminUser[]): string[] {
   return allSame ? [formatAddress(group[0])] : group.map(formatAddress);
 }
 
-// Same word-match ranking as filterByName, but a group matches if any of
-// its members' names do — the best-ranked member decides the group's rank.
-function filterGroupsByName(groups: AdminUser[][], query: string): AdminUser[][] {
+// Users tab: match spans name, kids, and address, in that priority order,
+// so a hit on name always outranks a hit on kids, which always outranks a
+// hit on address — the most identifying field decides the sort order.
+function filterUserGroups(groups: AdminUser[][], query: string): AdminUser[][] {
   const q = query.trim();
   if (!q) return groups;
   return groups
-    .map((group) => ({
-      group,
-      rank: Math.min(...group.map((u) => rankNameMatch(u.name, q) ?? Infinity)),
-    }))
-    .filter((r): r is { group: AdminUser[]; rank: number } => r.rank !== Infinity)
+    .map((group) => {
+      const fields = [
+        ...group.map((u) => ({ value: u.name, priority: 0 })),
+        ...combinedKids(group).map((k) => ({ value: k, priority: 1 })),
+        ...groupAddressLines(group).map((a) => ({ value: a, priority: 2 })),
+      ];
+      return { group, rank: rankFields(fields, q) };
+    })
+    .filter((r): r is { group: AdminUser[]; rank: number } => r.rank !== null)
     .sort((a, b) => a.rank - b.rank || a.group[0].name.localeCompare(b.group[0].name))
     .map((r) => r.group);
+}
+
+// Carpools tab: match spans name, members, and destination address, in
+// that priority order, with day/code as a lower-priority catch-all — a
+// member or address hit still ranks below a name hit.
+function filterCarpools(carpools: AdminCarpool[], query: string): AdminCarpool[] {
+  const q = query.trim();
+  if (!q) return carpools;
+  return carpools
+    .map((c) => {
+      const destination = c.destination?.street ? `${c.destination.street}, ${c.destination.zip}` : "";
+      const fields = [
+        { value: c.name, priority: 0 },
+        ...c.members.map((m) => ({ value: m.name, priority: 1 })),
+        { value: destination, priority: 2 },
+        { value: c.day ?? "", priority: 3 },
+        { value: c.code, priority: 3 },
+      ];
+      return { c, rank: rankFields(fields, q) };
+    })
+    .filter((r): r is { c: AdminCarpool; rank: number } => r.rank !== null)
+    .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+    .map((r) => r.c);
 }
 
 function NameAutosuggest({
@@ -733,8 +809,8 @@ export function AdminPage() {
     ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
     : [];
 
-  const filteredUserGroups = filterGroupsByName(groupUsersByCoParent(users), userSearch);
-  const filteredCarpools = filterByName(carpools, carpoolSearch, (c) => c.name);
+  const filteredUserGroups = filterUserGroups(groupUsersByCoParent(users), userSearch);
+  const filteredCarpools = filterCarpools(carpools, carpoolSearch);
 
   if (!key) {
     return (
@@ -818,7 +894,7 @@ export function AdminPage() {
                               className="admin-name-link"
                               onClick={() => startEditUser(u)}
                             >
-                              <HighlightedName name={u.name} query={userSearch} />
+                              <HighlightedText text={u.name} query={userSearch} />
                             </span>
                           ))}
                         </div>
@@ -829,7 +905,7 @@ export function AdminPage() {
                         ) : (
                           <div className="admin-kid-lines">
                             {kids.map((kid) => (
-                              <div key={kid}>{kid}</div>
+                              <div key={kid}><HighlightedText text={kid} query={userSearch} /></div>
                             ))}
                           </div>
                         )}
@@ -837,7 +913,7 @@ export function AdminPage() {
                       <td>
                         <div className="admin-kid-lines">
                           {addressLines.map((line, i) => (
-                            <div key={i}>{line}</div>
+                            <div key={i}><HighlightedText text={line} query={userSearch} /></div>
                           ))}
                         </div>
                       </td>
@@ -878,10 +954,14 @@ export function AdminPage() {
               <tbody>
                 {filteredCarpools.map((c) => (
                   <tr key={c.code} className="admin-row-clickable" onClick={() => startEditCarpool(c)}>
-                    <td><HighlightedName name={c.name} query={carpoolSearch} /></td>
-                    <td>{c.day ?? "—"}</td>
+                    <td><HighlightedText text={c.name} query={carpoolSearch} /></td>
+                    <td>{c.day ? <HighlightedText text={c.day} query={carpoolSearch} /> : "—"}</td>
                     <td>
-                      {c.destination?.street ? `${c.destination.street}, ${c.destination.zip}` : "—"}
+                      {c.destination?.street ? (
+                        <HighlightedText text={`${c.destination.street}, ${c.destination.zip}`} query={carpoolSearch} />
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td>{c.dropOff?.time || "—"}</td>
                     <td>{c.pickUp?.time || "—"}</td>
@@ -889,7 +969,7 @@ export function AdminPage() {
                       {c.members.length > 0 ? (
                         <div className="admin-member-list">
                           {c.members.map((m) => (
-                            <div key={m.id}>{m.name}</div>
+                            <div key={m.id}><HighlightedText text={m.name} query={carpoolSearch} /></div>
                           ))}
                         </div>
                       ) : (

@@ -36,6 +36,8 @@
   --admin-chip-bg: #f3f4f6;
   --admin-panel-backdrop: rgba(15, 15, 20, 0.35);
   --admin-panel-shadow: rgba(0, 0, 0, 0.15);
+  --admin-search-match-bg: #fff3a3;
+  --admin-search-match-text: #4a3d00;
 
   /* Rendered height of the fixed .app-shell-topper — single source of
      truth so nothing has to re-derive or guess it. */
@@ -91,6 +93,8 @@
     --admin-chip-bg: #262a33;
     --admin-panel-backdrop: rgba(0, 0, 0, 0.55);
     --admin-panel-shadow: rgba(0, 0, 0, 0.4);
+    --admin-search-match-bg: #4a3d00;
+    --admin-search-match-text: #ffe680;
   }
 }
 
@@ -2511,6 +2515,14 @@ button {
 
 .admin-name-link:hover {
   text-decoration: underline;
+}
+
+.admin-search-match {
+  background: var(--admin-search-match-bg);
+  color: var(--admin-search-match-text);
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 .admin-mono {
