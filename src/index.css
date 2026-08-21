@@ -3312,6 +3312,43 @@ button {
   color: var(--admin-text-muted-2);
 }
 
+.admin-dataviz-toggle-with-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.admin-dataviz-toggle-menu-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--admin-text-muted-2);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-dataviz-toggle-menu-chevron:hover {
+  color: var(--admin-text);
+}
+
+.admin-dataviz-toggle-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
 .admin-dataviz-map {
   width: 100%;
   height: 340px;
