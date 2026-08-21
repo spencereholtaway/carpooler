@@ -120,47 +120,28 @@ function CoParentLink({ names }: { names: string[] }) {
   );
 }
 
-// Groups users into households by shared kids: any two users who list the
-// exact same kid name are assumed to be co-parents (or other caregivers,
-// e.g. a nanny) of that kid rather than a coincidence, and the grouping is
-// transitive — three or more users can end up in one group if they're
-// chained together by overlapping kids — so the Users table can show one
-// row per household instead of duplicating each shared kid across rows.
-function groupUsersByKids(users: AdminUser[]): AdminUser[][] {
-  const parent = users.map((_, i) => i);
-  const find = (i: number): number => {
-    while (parent[i] !== i) {
-      parent[i] = parent[parent[i]];
-      i = parent[i];
+// Groups users into households by the confirmed co-parent link only
+// (coParentId, set via the "Link" action in the edit panel) — not by
+// merely sharing a kid name, since that's just a hint for an admin to
+// notice and confirm, not proof the two users are actually the same
+// household. coParentId is a single pairwise link, so groups are only
+// ever size 1 or 2.
+function groupUsersByCoParent(users: AdminUser[]): AdminUser[][] {
+  const byId = new Map(users.map((u) => [u.memberId, u]));
+  const seen = new Set<string>();
+  const groups: AdminUser[][] = [];
+  users.forEach((u) => {
+    if (seen.has(u.memberId)) return;
+    seen.add(u.memberId);
+    const partner = u.coParentId ? byId.get(u.coParentId) : undefined;
+    if (partner && !seen.has(partner.memberId)) {
+      seen.add(partner.memberId);
+      groups.push([u, partner]);
+    } else {
+      groups.push([u]);
     }
-    return i;
-  };
-  const union = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent[ra] = rb;
-  };
-
-  const usersByKid = new Map<string, number[]>();
-  users.forEach((u, i) => {
-    (u.kids ?? []).forEach((kid) => {
-      const indices = usersByKid.get(kid) ?? [];
-      indices.push(i);
-      usersByKid.set(kid, indices);
-    });
   });
-  usersByKid.forEach((indices) => {
-    for (let i = 1; i < indices.length; i++) union(indices[0], indices[i]);
-  });
-
-  const groups = new Map<number, AdminUser[]>();
-  users.forEach((u, i) => {
-    const root = find(i);
-    const group = groups.get(root) ?? [];
-    group.push(u);
-    groups.set(root, group);
-  });
-  return Array.from(groups.values());
+  return groups;
 }
 
 function combinedKids(group: AdminUser[]): string[] {
@@ -752,7 +733,7 @@ export function AdminPage() {
     ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
     : [];
 
-  const filteredUserGroups = filterGroupsByName(groupUsersByKids(users), userSearch);
+  const filteredUserGroups = filterGroupsByName(groupUsersByCoParent(users), userSearch);
   const filteredCarpools = filterByName(carpools, carpoolSearch, (c) => c.name);
 
   if (!key) {
