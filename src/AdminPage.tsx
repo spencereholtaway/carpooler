@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { computeKidDefaults, resolveKidDrivers } from "./carpoolSummary";
+import { AdminDatavizPanel, DATAVIZ_TABS, type DatavizTab } from "./AdminDataviz";
 
 const KEY_STORAGE = "blisspool:admin-key";
 
@@ -564,7 +565,8 @@ export function AdminPage() {
 
   const [key, setKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
   const [keyInput, setKeyInput] = useState("");
-  const [tab, setTab] = useState<"users" | "carpools" | "updates">("users");
+  const [tab, setTab] = useState<"users" | "carpools" | "updates" | "dataviz">("users");
+  const [datavizTab, setDatavizTab] = useState<DatavizTab>("geography");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [carpools, setCarpools] = useState<AdminCarpool[]>([]);
   const [updates, setUpdates] = useState<AdminUpdate[]>([]);
@@ -853,7 +855,23 @@ export function AdminPage() {
             <button className={tab === "updates" ? "active" : ""} onClick={() => setTab("updates")}>
               Updates ({updates.length})
             </button>
+            <button className={tab === "dataviz" ? "active" : ""} onClick={() => setTab("dataviz")}>
+              DataViz
+            </button>
           </nav>
+          {tab === "dataviz" && (
+            <nav className="admin-subtabs">
+              {DATAVIZ_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  className={datavizTab === t.key ? "active" : ""}
+                  onClick={() => setDatavizTab(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
       </header>
 
@@ -1035,6 +1053,10 @@ export function AdminPage() {
             </table>
             </div>
           </>
+        )}
+
+        {!loading && tab === "dataviz" && (
+          <AdminDatavizPanel users={users} carpools={carpools} subTab={datavizTab} />
         )}
         </div>
       </main>

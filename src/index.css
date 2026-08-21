@@ -32,6 +32,7 @@
   --admin-text-muted: #6b7280;
   --admin-text-muted-2: #374151;
   --admin-accent: #4f46e5;
+  --admin-accent-rgb: 79, 70, 229;
   --admin-danger: #dc2626;
   --admin-chip-bg: #f3f4f6;
   --admin-panel-backdrop: rgba(15, 15, 20, 0.35);
@@ -89,6 +90,7 @@
     --admin-text-muted: #9aa1b1;
     --admin-text-muted-2: #c2c7d2;
     --admin-accent: #818cf8;
+    --admin-accent-rgb: 129, 140, 248;
     --admin-danger: #f87171;
     --admin-chip-bg: #262a33;
     --admin-panel-backdrop: rgba(0, 0, 0, 0.55);
@@ -2468,14 +2470,14 @@ button {
 
 .admin-tabs {
   display: flex;
-  gap: 4px;
+  gap: 8px;
 }
 
 .admin-tabs button {
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: none;
   background: none;
   color: var(--admin-text-muted);
@@ -2484,6 +2486,29 @@ button {
 }
 
 .admin-tabs button.active {
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
+}
+
+.admin-subtabs {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 14px;
+}
+
+.admin-subtabs button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--admin-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.admin-subtabs button.active {
   color: var(--admin-accent);
   border-bottom-color: var(--admin-accent);
 }
@@ -2966,4 +2991,387 @@ button {
   font-size: 11px;
   cursor: help;
   opacity: 0.75;
+}
+
+/* --- admin dataviz tab --- */
+
+.admin-dataviz-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 4px;
+}
+
+.admin-dataviz-metrics-note {
+  margin: -4px 0 12px;
+  font-size: 12px;
+}
+
+.admin-dataviz-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 800px) {
+  .admin-dataviz-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-dataviz-widget-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.admin-dataviz-widget {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.admin-dataviz-widget h3 {
+  font-family: inherit;
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.admin-dataviz-recs h2 {
+  font-family: inherit;
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.admin-dataviz-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-dataviz-stat-tile {
+  flex: 1 1 120px;
+  background: var(--admin-surface-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.admin-dataviz-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--admin-text);
+  line-height: 1.2;
+}
+
+.admin-dataviz-stat-label {
+  font-size: 11px;
+  color: var(--admin-text-muted);
+}
+
+/* --- ranked bar list --- */
+
+.admin-dataviz-barlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-dataviz-bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.admin-dataviz-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--admin-text-muted-2);
+}
+
+.admin-dataviz-bar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--admin-surface-2);
+  overflow: hidden;
+}
+
+.admin-dataviz-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--admin-accent);
+}
+
+.admin-dataviz-bar-count {
+  min-width: 32px;
+  text-align: right;
+  color: var(--admin-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- diverging bar list --- */
+
+.admin-dataviz-diverging-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--admin-surface-2);
+  overflow: hidden;
+}
+
+.admin-dataviz-diverging-center {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--admin-border);
+}
+
+.admin-dataviz-diverging-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--admin-accent);
+  border-radius: 999px;
+}
+
+.admin-dataviz-diverging-fill.negative {
+  background: var(--admin-danger);
+}
+
+/* --- smoothed line/area histogram --- */
+
+.admin-dataviz-hist-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-dataviz-hist-row {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-dataviz-hist-yaxis {
+  position: relative;
+  width: 24px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--admin-text-muted);
+}
+
+.admin-dataviz-hist-yaxis span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.admin-dataviz-hist-plot {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-dataviz-hist-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.admin-dataviz-hist-gridline {
+  stroke: var(--admin-border-faint);
+  stroke-width: 1;
+}
+
+.admin-dataviz-hist-area {
+  fill: rgba(var(--admin-accent-rgb), 0.12);
+  stroke: none;
+}
+
+.admin-dataviz-hist-line {
+  fill: none;
+  stroke: var(--admin-accent);
+  stroke-width: 1.5;
+}
+
+.admin-dataviz-hist-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--admin-accent);
+  transform: translate(-50%, -50%);
+}
+
+.admin-dataviz-hist-axis {
+  position: relative;
+  height: 14px;
+  margin-left: 32px;
+}
+
+.admin-dataviz-hist-tick {
+  position: absolute;
+  font-size: 10px;
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+}
+
+/* --- pie chart --- */
+
+.admin-dataviz-pie-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-dataviz-pie-svg {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.admin-dataviz-pie-slice {
+  cursor: default;
+}
+
+.admin-dataviz-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.admin-dataviz-pie-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.admin-dataviz-pie-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.admin-dataviz-pie-legend-label {
+  flex: 1;
+  color: var(--admin-text-muted-2);
+}
+
+.admin-dataviz-pie-legend-count {
+  color: var(--admin-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- geography map --- */
+
+.admin-dataviz-map-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--admin-surface);
+}
+
+.admin-dataviz-map-wrapper:fullscreen {
+  padding: 12px;
+}
+
+.admin-dataviz-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-dataviz-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-dataviz-toggle-group button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-surface-2);
+  color: var(--admin-text-muted-2);
+  cursor: pointer;
+}
+
+.admin-dataviz-graph-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--admin-text-muted-2);
+}
+
+.admin-dataviz-map {
+  width: 100%;
+  height: 340px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+}
+
+.admin-dataviz-map-wrapper:fullscreen .admin-dataviz-map {
+  height: 100%;
+}
+
+/* --- recommendations --- */
+
+.admin-dataviz-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-dataviz-threshold-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.admin-dataviz-threshold-bar button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-surface-2);
+  color: var(--admin-text-muted-2);
+  cursor: pointer;
+}
+
+.admin-dataviz-threshold-bar button.active {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: #fff;
+}
+
+.admin-dataviz-kid-line {
+  padding: 3px 0;
+  white-space: normal;
+}
+
+.admin-dataviz-kid-line + .admin-dataviz-kid-line {
+  border-top: 1px solid var(--admin-border-faint);
 }
