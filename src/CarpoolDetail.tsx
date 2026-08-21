@@ -1189,7 +1189,6 @@ export function CarpoolDetail({
         <p>
           You've removed all of your kids from this carpool. Saving will remove you
           {household?.coParentId ? " (and your linked co-parent, if they're in it too)" : ""} from it.
-          {soloMember ? " Since you're the only member, this will delete the carpool entirely." : ""}
         </p>
       </BottomSheet>
     </div>
