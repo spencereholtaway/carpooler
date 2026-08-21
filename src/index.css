@@ -24,6 +24,7 @@
   --admin-bg: #f3f4f6;
   --admin-surface: #ffffff;
   --admin-surface-2: #f9fafb;
+  --admin-map-placeholder: #fafbfc;
   --admin-border: #e2e4e9;
   --admin-border-soft: #e5e7eb;
   --admin-border-faint: #f0f1f3;
@@ -82,6 +83,7 @@
     --admin-bg: #14161c;
     --admin-surface: #1c1f27;
     --admin-surface-2: #20232c;
+    --admin-map-placeholder: #0e1014;
     --admin-border: #2c303b;
     --admin-border-soft: #2c303b;
     --admin-border-faint: #262a33;
@@ -3316,6 +3318,13 @@ button {
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--admin-border);
+}
+
+/* Leaflet defaults this to a flat #ddd; theme it so the empty-tile
+   state (basemap off, or tiles still loading) reads as part of the
+   page instead of a generic gray box. */
+.admin-dataviz-map .leaflet-container {
+  background: var(--admin-map-placeholder);
 }
 
 .admin-dataviz-map-wrapper:fullscreen .admin-dataviz-map {
