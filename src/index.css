@@ -2857,3 +2857,16 @@ button {
   margin-top: -2px;
   color: var(--admin-text-muted-2);
 }
+
+.admin-kid-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-coparent-link {
+  margin-left: 5px;
+  font-size: 11px;
+  cursor: help;
+  opacity: 0.75;
+}

@@ -107,26 +107,37 @@ function HighlightedName({ name, query }: { name: string; query: string }) {
   return <>{parts}</>;
 }
 
-// A kid this user shares with their linked co-parent (same spelling on both
-// profiles) is genuinely the same child, not two — flag that inline so it
-// reads as one kid with two parents instead of looking like a duplicate.
-// Only fires when the co-parent's own kids list actually contains the exact
-// same string; a kid only one side has listed shows plain, same as before.
+// A small chain-link icon marking a kid as shared between parents, with
+// every parent's name (this row's parent included) in the hover tooltip —
+// e.g. "Spencer Holtaway & Lindsey Holtaway" — instead of a text suffix.
+function CoParentLink({ names }: { names: string[] }) {
+  if (names.length < 2) return null;
+  return (
+    <span className="admin-coparent-link" title={names.join(" & ")}>
+      🔗
+    </span>
+  );
+}
+
+// Two parents both listing the exact same kid name are assumed to be the
+// same kid with two parents (co-parents share their kids, for now) rather
+// than a coincidence — not gated on a confirmed household link, so this
+// also surfaces likely-but-unlinked pairs (e.g. two members both listing
+// "Miles") for reconciliation, same as it would for a confirmed pair.
 function KidsCell({ user, users }: { user: AdminUser; users: AdminUser[] }) {
   if (!user.kids || user.kids.length === 0) return <>—</>;
-  const coParent = user.coParentId ? users.find((u) => u.memberId === user.coParentId) : null;
   return (
-    <>
-      {user.kids.map((kid, i) => (
-        <span key={kid}>
-          {i > 0 && ", "}
-          {kid}
-          {coParent?.kids?.includes(kid) && (
-            <span className="admin-muted"> (w/ {coParent.name})</span>
-          )}
-        </span>
-      ))}
-    </>
+    <div className="admin-kid-lines">
+      {user.kids.map((kid) => {
+        const others = users.filter((u) => u.memberId !== user.memberId && u.kids?.includes(kid));
+        return (
+          <div key={kid}>
+            {kid}
+            <CoParentLink names={[user.name, ...others.map((u) => u.name)]} />
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -296,7 +307,7 @@ function LegAssignments({
     a.localeCompare(b)
   );
   const driverFor = (kid: string) => cars.find((c) => c.kids.includes(kid))?.driverId ?? "";
-  const parentOf = (kid: string) => carpool.members.find((m) => m.kids.includes(kid))?.name ?? "";
+  const parentsOf = (kid: string) => carpool.members.filter((m) => m.kids.includes(kid)).map((m) => m.name);
 
   return (
     <div className="admin-panel-leg-assignments">
@@ -315,16 +326,20 @@ function LegAssignments({
           </thead>
           <tbody>
             {allKids.map((kid) => {
+              const parents = parentsOf(kid);
               // A kid with no explicit car still has a default ride: their
               // own parent, if that parent is driving this leg — the picker
               // should say so instead of showing a bare "Unassigned".
-              const defaultLabel = `${parentOf(kid)} (default)`;
+              const defaultLabel = `${parents[0] ?? ""} (default)`;
               return (
                 <tr key={kid}>
                   <td>
                     <div className="admin-kid-cell">
                       <strong>{kid}</strong>
-                      <span className="admin-kid-parent">{parentOf(kid)}</span>
+                      <span className="admin-kid-parent">
+                        {parents[0]}
+                        <CoParentLink names={parents} />
+                      </span>
                     </div>
                   </td>
                   <td>

@@ -168,6 +168,25 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
       return new Response("ok");
     }
+    // Adds a kid to a member's profile only — deliberately not synced into
+    // any carpool they already belong to. updateUser overwrites a carpool's
+    // Member.kids with the member's *entire* profile kids list, which is
+    // wrong here: a co-parent might already be a member of a carpool for a
+    // kid THEY don't share (e.g. Carmen is in a boys'-soccer carpool for
+    // William only), and pushing her full kids list there would incorrectly
+    // add Caroline to a carpool Caroline has nothing to do with. Carpool
+    // membership for the added kid, if any, stays something the parent
+    // opts into per carpool, same as any other kid.
+    case "addKidToProfile": {
+      const { memberId, kid } = body.payload as { memberId: string; kid: string };
+      if (!memberId || !kid) return new Response("Invalid payload", { status: 400 });
+      const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
+      if (!profile) return new Response("User not found", { status: 404 });
+      if (!profile.kids.includes(kid)) {
+        await store.setJSON(`profile:${memberId}`, { ...profile, kids: [...profile.kids, kid] });
+      }
+      return new Response("ok");
+    }
     // Renames one kid string for a member everywhere it appears in their
     // own carpools — profile, each carpool's Member.kids row, and any car
     // that already has them explicitly assigned. Unlike updateUser (which
