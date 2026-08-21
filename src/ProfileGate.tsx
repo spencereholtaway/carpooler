@@ -11,7 +11,7 @@ export function ProfileGate({
   onSubmit: (profile: LocalProfile) => void;
   onRecoverMemberId: (id: string) => void;
 }) {
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<0 | 1 | "coparent" | 2>(0);
   const [name, setName] = useState("");
   const [checkingName, setCheckingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -24,6 +24,11 @@ export function ProfileGate({
   const [zip, setZip] = useState("");
   const [coParentName, setCoParentName] = useState<string | null>(null);
   const coParentCode = useRef(new URLSearchParams(window.location.search).get("coparent")).current;
+
+  const [wantsCoParentLink, setWantsCoParentLink] = useState(false);
+  const [coParentCodeInput, setCoParentCodeInput] = useState("");
+  const [linkingCoParent, setLinkingCoParent] = useState(false);
+  const [coParentLinkError, setCoParentLinkError] = useState<string | null>(null);
 
   const handleNameSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -49,6 +54,7 @@ export function ProfileGate({
         } catch {
           // No prior profile to recover from — fine, they'll just fill it in.
         }
+        setStep(2);
       } else {
         setReturning(false);
         if (coParentCode) {
@@ -59,13 +65,36 @@ export function ProfileGate({
           } catch {
             // Bad/expired invite code — fine, they just fill their own info in.
           }
+          setStep(2);
+        } else {
+          // No invite link in the URL — ask directly rather than letting them
+          // type kid names blind that might already exist, differently
+          // spelled, on a co-parent's account.
+          setStep("coparent");
         }
       }
-      setStep(2);
     } catch {
       setNameError("Couldn't check that name. Try again.");
     } finally {
       setCheckingName(false);
+    }
+  };
+
+  const handleCoParentCodeSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = coParentCodeInput.trim();
+    if (!trimmed) return;
+    setLinkingCoParent(true);
+    setCoParentLinkError(null);
+    try {
+      const link = await linkHousehold(trimmed, memberId);
+      setCoParentName(link.coParentName);
+      setKids(link.coParentKids);
+      setStep(2);
+    } catch {
+      setCoParentLinkError("That code didn't work — double check it and try again.");
+    } finally {
+      setLinkingCoParent(false);
     }
   };
 
@@ -146,6 +175,50 @@ export function ProfileGate({
         <p className="gate-fineprint">
           No password. No email. Already have a name here? Just type it again.
         </p>
+      </div>
+    );
+  }
+
+  if (step === "coparent") {
+    return (
+      <div className="gate-card pop-in">
+        <h2 className="gate-heading">Is your co-parent already using blisspool?</h2>
+        <p className="gate-sub">
+          If they&rsquo;ve already added your kids, we can pull their exact names in instead of
+          you retyping them — that way carpools don&rsquo;t end up treating &ldquo;Will&rdquo;
+          and &ldquo;William&rdquo; as two different kids.
+        </p>
+        {!wantsCoParentLink ? (
+          <div className="gate-form">
+            <button type="button" className="pill-button" onClick={() => setWantsCoParentLink(true)}>
+              Yes, link us up →
+            </button>
+            <button type="button" className="pill-button secondary" onClick={() => setStep(2)}>
+              No / not yet
+            </button>
+          </div>
+        ) : (
+          <form className="gate-form" onSubmit={handleCoParentCodeSubmit}>
+            <input
+              className="gate-input"
+              placeholder="Their invite code"
+              value={coParentCodeInput}
+              onChange={(e) => {
+                setCoParentCodeInput(e.target.value);
+                setCoParentLinkError(null);
+              }}
+              autoFocus
+              required
+            />
+            {coParentLinkError && <p className="form-error">{coParentLinkError}</p>}
+            <button type="submit" className="pill-button" disabled={linkingCoParent}>
+              {linkingCoParent ? "Linking..." : "Link us up →"}
+            </button>
+            <button type="button" className="pill-button secondary" onClick={() => setStep(2)}>
+              Skip for now
+            </button>
+          </form>
+        )}
       </div>
     );
   }
