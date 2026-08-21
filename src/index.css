@@ -3323,7 +3323,7 @@ button {
 /* Leaflet defaults this to a flat #ddd; theme it so the empty-tile
    state (basemap off, or tiles still loading) reads as part of the
    page instead of a generic gray box. */
-.admin-dataviz-map .leaflet-container {
+.admin-dataviz-map.leaflet-container {
   background: var(--admin-map-placeholder);
 }
 
