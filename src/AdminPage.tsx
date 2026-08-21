@@ -119,26 +119,66 @@ function CoParentLink({ names }: { names: string[] }) {
   );
 }
 
-// Two parents both listing the exact same kid name are assumed to be the
-// same kid with two parents (co-parents share their kids, for now) rather
-// than a coincidence — not gated on a confirmed household link, so this
-// also surfaces likely-but-unlinked pairs (e.g. two members both listing
-// "Miles") for reconciliation, same as it would for a confirmed pair.
-function KidsCell({ user, users }: { user: AdminUser; users: AdminUser[] }) {
-  if (!user.kids || user.kids.length === 0) return <>—</>;
-  return (
-    <div className="admin-kid-lines">
-      {user.kids.map((kid) => {
-        const others = users.filter((u) => u.memberId !== user.memberId && u.kids?.includes(kid));
-        return (
-          <div key={kid}>
-            {kid}
-            <CoParentLink names={[user.name, ...others.map((u) => u.name)]} />
-          </div>
-        );
-      })}
-    </div>
-  );
+// Groups users into households by shared kids: any two users who list the
+// exact same kid name are assumed to be co-parents (or other caregivers,
+// e.g. a nanny) of that kid rather than a coincidence, and the grouping is
+// transitive — three or more users can end up in one group if they're
+// chained together by overlapping kids — so the Users table can show one
+// row per household instead of duplicating each shared kid across rows.
+function groupUsersByKids(users: AdminUser[]): AdminUser[][] {
+  const parent = users.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  };
+
+  const usersByKid = new Map<string, number[]>();
+  users.forEach((u, i) => {
+    (u.kids ?? []).forEach((kid) => {
+      const indices = usersByKid.get(kid) ?? [];
+      indices.push(i);
+      usersByKid.set(kid, indices);
+    });
+  });
+  usersByKid.forEach((indices) => {
+    for (let i = 1; i < indices.length; i++) union(indices[0], indices[i]);
+  });
+
+  const groups = new Map<number, AdminUser[]>();
+  users.forEach((u, i) => {
+    const root = find(i);
+    const group = groups.get(root) ?? [];
+    group.push(u);
+    groups.set(root, group);
+  });
+  return Array.from(groups.values());
+}
+
+function combinedKids(group: AdminUser[]): string[] {
+  return Array.from(new Set(group.flatMap((u) => u.kids ?? [])));
+}
+
+// Same word-match ranking as filterByName, but a group matches if any of
+// its members' names do — the best-ranked member decides the group's rank.
+function filterGroupsByName(groups: AdminUser[][], query: string): AdminUser[][] {
+  const q = query.trim();
+  if (!q) return groups;
+  return groups
+    .map((group) => ({
+      group,
+      rank: Math.min(...group.map((u) => rankNameMatch(u.name, q) ?? Infinity)),
+    }))
+    .filter((r): r is { group: AdminUser[]; rank: number } => r.rank !== Infinity)
+    .sort((a, b) => a.rank - b.rank || a.group[0].name.localeCompare(b.group[0].name))
+    .map((r) => r.group);
 }
 
 function NameAutosuggest({
@@ -695,7 +735,7 @@ export function AdminPage() {
     ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
     : [];
 
-  const filteredUsers = filterByName(users, userSearch, (u) => u.name);
+  const filteredUserGroups = filterGroupsByName(groupUsersByKids(users), userSearch);
   const filteredCarpools = filterByName(carpools, carpoolSearch, (c) => c.name);
 
   if (!key) {

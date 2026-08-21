@@ -2498,6 +2498,27 @@ button {
   background: var(--admin-surface-2);
 }
 
+.admin-name-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-name-link {
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.admin-name-link:hover {
+  text-decoration: underline;
+}
+
+.admin-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .admin-mono {
   font-family: ui-monospace, monospace;
   font-size: 12px;
