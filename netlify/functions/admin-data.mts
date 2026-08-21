@@ -168,6 +168,77 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
       return new Response("ok");
     }
+    // Renames one kid string for a member everywhere it appears in their
+    // own carpools — profile, each carpool's Member.kids row, and any car
+    // that already has them explicitly assigned. Unlike updateUser (which
+    // only ever touches Member.kids), this also fixes Car.kids so an
+    // already-arranged ride doesn't go stale/orphaned under the old
+    // spelling. Exists for reconciling a co-parent pair who each typed a
+    // different spelling for the same kid (e.g. "Will" vs "William")
+    // before either carpool data existed to notice. If oldName and newName
+    // are already riding in two *different* cars on the same leg, that's a
+    // real scheduling conflict, not just a spelling mismatch — left
+    // untouched and reported back rather than silently picking a winner.
+    case "mergeKidName": {
+      const { memberId, oldName, newName } = body.payload as {
+        memberId: string;
+        oldName: string;
+        newName: string;
+      };
+      if (!memberId || !oldName || !newName || oldName === newName) {
+        return new Response("Invalid payload", { status: 400 });
+      }
+
+      const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
+      if (!profile) return new Response("User not found", { status: 404 });
+      if (profile.kids.includes(oldName)) {
+        const kids = profile.kids.filter((k) => k !== oldName);
+        if (!kids.includes(newName)) kids.push(newName);
+        await store.setJSON(`profile:${memberId}`, { ...profile, kids });
+      }
+
+      const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
+      const carpoolsUpdated: { code: string; name: string }[] = [];
+      const conflicts: { code: string; name: string; leg: "dropOff" | "pickUp" }[] = [];
+
+      for (const code of codes) {
+        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        if (!carpool) continue;
+        let changed = false;
+
+        const member = carpool.members.find((m) => m.id === memberId);
+        if (member?.kids.includes(oldName)) {
+          member.kids = member.kids.filter((k) => k !== oldName);
+          if (!member.kids.includes(newName)) member.kids.push(newName);
+          changed = true;
+        }
+
+        for (const [legName, leg] of [
+          ["dropOff", carpool.dropOff],
+          ["pickUp", carpool.pickUp],
+        ] as const) {
+          const oldCar = leg?.cars?.find((c) => c.kids.includes(oldName));
+          if (!oldCar) continue;
+          const newCar = leg.cars.find((c) => c !== oldCar && c.kids.includes(newName));
+          if (newCar) {
+            conflicts.push({ code, name: carpool.name, leg: legName });
+            continue;
+          }
+          oldCar.kids = oldCar.kids.filter((k) => k !== oldName);
+          if (!oldCar.kids.includes(newName)) oldCar.kids.push(newName);
+          changed = true;
+        }
+
+        if (changed) {
+          await store.setJSON(`code:${code}`, carpool);
+          carpoolsUpdated.push({ code, name: carpool.name });
+        }
+      }
+
+      return new Response(JSON.stringify({ carpoolsUpdated, conflicts }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     case "deleteUser": {
       const { memberId } = body.payload;
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
