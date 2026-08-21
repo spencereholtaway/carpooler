@@ -807,15 +807,46 @@ export function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((u) => (
-                  <tr key={u.memberId} className="admin-row-clickable" onClick={() => startEditUser(u)}>
-                    <td><HighlightedName name={u.name} query={userSearch} /></td>
-                    <td><KidsCell user={u} users={users} /></td>
-                    <td>
-                      <button onClick={(e) => { e.stopPropagation(); deleteUser(u.memberId); }}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredUserGroups.map((group) => {
+                  const kids = combinedKids(group);
+                  return (
+                    <tr key={group.map((u) => u.memberId).join("-")}>
+                      <td>
+                        <div className="admin-name-links">
+                          {group.map((u) => (
+                            <span
+                              key={u.memberId}
+                              className="admin-name-link"
+                              onClick={() => startEditUser(u)}
+                            >
+                              <HighlightedName name={u.name} query={userSearch} />
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        {kids.length === 0 ? (
+                          "—"
+                        ) : (
+                          <div className="admin-kid-lines">
+                            {kids.map((kid) => (
+                              <div key={kid}>{kid}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <div className="admin-row-actions">
+                          {group.map((u) => (
+                            <button key={u.memberId} onClick={() => deleteUser(u.memberId)}>
+                              Delete{group.length > 1 ? ` ${u.name}` : ""}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             </div>
