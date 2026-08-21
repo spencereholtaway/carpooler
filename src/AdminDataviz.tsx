@@ -951,6 +951,7 @@ function MapView({
   adjacency,
   graphMode,
   showAllBlobs,
+  includeDestinationInBlobs,
   showMap,
   resetToken,
   interactive,
@@ -959,6 +960,7 @@ function MapView({
   adjacency: Record<string, string[]>;
   graphMode: boolean;
   showAllBlobs: boolean;
+  includeDestinationInBlobs: boolean;
   showMap: boolean;
   resetToken: number;
   interactive: boolean;
@@ -1095,6 +1097,7 @@ function MapView({
             .filter((id) => id.startsWith("home:"))
             .map((id) => byId.get(id))
             .filter((h): h is MapPoint => h != null);
+          if (includeDestinationInBlobs) homePoints.push(p);
           if (homePoints.length === 0) return;
           permanentBlobs.push(buildBlob(homePoints, { fillOpacity: 0.12, weight: 0 }).addTo(map));
         });
@@ -1214,7 +1217,7 @@ function MapView({
       permanentBlobs.forEach((l) => l.remove());
       markers.forEach((m) => m.remove());
     };
-  }, [points, adjacency, graphMode, showAllBlobs]);
+  }, [points, adjacency, graphMode, showAllBlobs, includeDestinationInBlobs]);
 
   return <div ref={containerRef} className="admin-dataviz-map" />;
 }
@@ -1244,8 +1247,20 @@ export function AdminDatavizPanel({
   const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
   const [graphMode, setGraphMode] = useState(false);
   const [showAllBlobs, setShowAllBlobs] = useState(false);
+  const [includeDestinationInBlobs, setIncludeDestinationInBlobs] = useState(false);
+  const [blobMenuOpen, setBlobMenuOpen] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [resetToken, setResetToken] = useState(0);
+
+  const blobMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!blobMenuOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (blobMenuRef.current && !blobMenuRef.current.contains(e.target as Node)) setBlobMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [blobMenuOpen]);
 
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1470,14 +1485,37 @@ export function AdminDatavizPanel({
                           />
                           Plot all connections
                         </label>
-                        <label className="admin-dataviz-graph-toggle">
-                          <input
-                            type="checkbox"
-                            checked={showAllBlobs}
-                            onChange={(e) => setShowAllBlobs(e.target.checked)}
-                          />
-                          All carpool areas (heatmap)
-                        </label>
+                        <div className="admin-dataviz-toggle-with-menu" ref={blobMenuRef}>
+                          <label className="admin-dataviz-graph-toggle">
+                            <input
+                              type="checkbox"
+                              checked={showAllBlobs}
+                              onChange={(e) => setShowAllBlobs(e.target.checked)}
+                            />
+                            All carpool areas (heatmap)
+                          </label>
+                          <button
+                            type="button"
+                            className="admin-dataviz-toggle-menu-chevron"
+                            aria-label="Heatmap options"
+                            aria-expanded={blobMenuOpen}
+                            onClick={() => setBlobMenuOpen((o) => !o)}
+                          >
+                            ▾
+                          </button>
+                          {blobMenuOpen && (
+                            <div className="admin-dataviz-toggle-menu">
+                              <label className="admin-dataviz-graph-toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={includeDestinationInBlobs}
+                                  onChange={(e) => setIncludeDestinationInBlobs(e.target.checked)}
+                                />
+                                Include destination
+                              </label>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="admin-dataviz-toggle-group">
                         <button type="button" onClick={() => setResetToken((t) => t + 1)}>
@@ -1493,6 +1531,7 @@ export function AdminDatavizPanel({
                       adjacency={adjacency}
                       graphMode={graphMode}
                       showAllBlobs={showAllBlobs}
+                      includeDestinationInBlobs={includeDestinationInBlobs}
                       showMap={showMap}
                       resetToken={resetToken}
                       interactive={isFullscreen}
