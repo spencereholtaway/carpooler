@@ -11,7 +11,7 @@ export function ProfileGate({
   onSubmit: (profile: LocalProfile) => void;
   onRecoverMemberId: (id: string) => void;
 }) {
-  const [step, setStep] = useState<0 | 1 | "coparent" | 2>(0);
+  const [step, setStep] = useState<0 | 1 | "coparent" | "livesWith" | 2>(0);
   const [name, setName] = useState("");
   const [checkingName, setCheckingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -23,6 +23,8 @@ export function ProfileGate({
   const [street, setStreet] = useState("");
   const [zip, setZip] = useState("");
   const [coParentName, setCoParentName] = useState<string | null>(null);
+  const [coParentStreet, setCoParentStreet] = useState<string | null>(null);
+  const [coParentZip, setCoParentZip] = useState<string | null>(null);
   const coParentCode = useRef(new URLSearchParams(window.location.search).get("coparent")).current;
 
   const [wantsCoParentLink, setWantsCoParentLink] = useState(false);
@@ -62,10 +64,13 @@ export function ProfileGate({
             const link = await linkHousehold(coParentCode, memberId);
             setCoParentName(link.coParentName);
             setKids(link.coParentKids);
+            setCoParentStreet(link.coParentStreet);
+            setCoParentZip(link.coParentZip);
+            setStep("livesWith");
           } catch {
             // Bad/expired invite code — fine, they just fill their own info in.
+            setStep(2);
           }
-          setStep(2);
         } else {
           // No invite link in the URL — ask directly rather than letting them
           // type kid names blind that might already exist, differently
@@ -90,7 +95,9 @@ export function ProfileGate({
       const link = await linkHousehold(trimmed, memberId);
       setCoParentName(link.coParentName);
       setKids(link.coParentKids);
-      setStep(2);
+      setCoParentStreet(link.coParentStreet);
+      setCoParentZip(link.coParentZip);
+      setStep("livesWith");
     } catch {
       setCoParentLinkError("That code didn't work — double check it and try again.");
     } finally {
@@ -227,6 +234,34 @@ export function ProfileGate({
             </button>
           </form>
         )}
+      </div>
+    );
+  }
+
+  if (step === "livesWith") {
+    return (
+      <div className="gate-card pop-in">
+        <h2 className="gate-heading">Do you live with {coParentName}?</h2>
+        <p className="gate-sub">
+          If you&rsquo;re at the same address, we can fill that in for you instead of you typing
+          it again.
+        </p>
+        <div className="gate-form">
+          <button
+            type="button"
+            className="pill-button"
+            onClick={() => {
+              setStreet(coParentStreet ?? "");
+              setZip(coParentZip ?? "");
+              setStep(2);
+            }}
+          >
+            Yes, same address →
+          </button>
+          <button type="button" className="pill-button secondary" onClick={() => setStep(2)}>
+            No, different address
+          </button>
+        </div>
       </div>
     );
   }
