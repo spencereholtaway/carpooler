@@ -166,6 +166,21 @@ function combinedKids(group: AdminUser[]): string[] {
   return Array.from(new Set(group.flatMap((u) => u.kids ?? [])));
 }
 
+function formatAddress(u: AdminUser): string {
+  if (!u.street && !u.zip) return "—";
+  return [u.street, u.zip].filter(Boolean).join(", ");
+}
+
+// Co-parents usually share one address, but not always (e.g. divorced
+// co-parents each with their own place) — so collapse to a single line
+// only when every member's address actually matches, otherwise show each
+// member's own address on its own line, in the same order as their name.
+function groupAddressLines(group: AdminUser[]): string[] {
+  const addresses = group.map((u) => `${u.street}||${u.zip}`);
+  const allSame = addresses.every((a) => a === addresses[0]);
+  return allSame ? [formatAddress(group[0])] : group.map(formatAddress);
+}
+
 // Same word-match ranking as filterByName, but a group matches if any of
 // its members' names do — the best-ranked member decides the group's rank.
 function filterGroupsByName(groups: AdminUser[][], query: string): AdminUser[][] {
@@ -804,11 +819,13 @@ export function AdminPage() {
                 <tr>
                   <th>Name</th>
                   <th>Kids</th>
+                  <th>Address</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUserGroups.map((group) => {
                   const kids = combinedKids(group);
+                  const addressLines = groupAddressLines(group);
                   return (
                     <tr key={group.map((u) => u.memberId).join("-")}>
                       <td>
@@ -834,6 +851,13 @@ export function AdminPage() {
                             ))}
                           </div>
                         )}
+                      </td>
+                      <td>
+                        <div className="admin-kid-lines">
+                          {addressLines.map((line, i) => (
+                            <div key={i}>{line}</div>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   );
