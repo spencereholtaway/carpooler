@@ -1,4 +1,4 @@
-import type { Car, Carpool, Member } from "./types";
+import type { Car, Carpool, Leg, Member } from "./types";
 
 export function formatTime(time: string) {
   if (!time) return "no time set";
@@ -161,4 +161,27 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// How many free seats this member is offering in their own car, per leg —
+// mirrors DrivingLeg's "free" calculation (car.seats minus other members'
+// kids already riding along; the driver's own kids don't count against it).
+// Not driving a leg at all (no car entry) reads as zero, same as there.
+function legOpenSeats(leg: Leg, memberId: string, selfKids: Set<string>): number {
+  const car = leg.cars.find((c) => c.driverId === memberId);
+  if (!car) return 0;
+  const otherKidsInCar = car.kids.filter((k) => !selfKids.has(k)).length;
+  return Math.max(car.seats - otherKidsInCar, 0);
+}
+
+// The most free seats this member is offering on either leg of the carpool —
+// used to flag carpools where they could still take on another kid.
+export function openSeatsForMember(carpool: Carpool, memberId: string): number {
+  const self = carpool.members.find((m) => m.id === memberId);
+  if (!self) return 0;
+  const selfKids = new Set(self.kids);
+  return Math.max(
+    legOpenSeats(carpool.dropOff, memberId, selfKids),
+    legOpenSeats(carpool.pickUp, memberId, selfKids)
+  );
 }
