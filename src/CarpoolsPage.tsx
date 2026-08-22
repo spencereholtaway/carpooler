@@ -332,8 +332,8 @@ export function CarpoolsPage({
                           <p key={i}>{line}</p>
                         ))}
                     </div>
-                    <OpenSeatsHint count={openSeatsFromOthers(c, memberId)} />
                   </div>
+                  <OpenSeatsHint count={openSeatsFromOthers(c, memberId)} />
                 </button>
               ))}
             </div>

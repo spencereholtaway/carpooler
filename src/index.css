@@ -887,6 +887,7 @@ button {
 }
 
 .carpool-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -930,11 +931,8 @@ button {
 }
 
 .carpool-row-summary-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   width: 100%;
+  padding-bottom: 22px;
 }
 
 .carpool-row-summary {
@@ -1002,7 +1000,9 @@ button {
 }
 
 .open-seats-hint {
-  flex-shrink: 0;
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 600;
