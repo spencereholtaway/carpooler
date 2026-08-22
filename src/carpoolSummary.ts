@@ -1,4 +1,4 @@
-import type { Car, Carpool, Leg, Member } from "./types";
+import type { Car, Carpool, Member } from "./types";
 
 export function formatTime(time: string) {
   if (!time) return "no time set";
@@ -174,9 +174,9 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
 // driving that same leg (see openSeatsFromOthers) — if their kid is already
 // riding with someone else, that other driver's spare seats aren't telling
 // them anything they can act on.
-function legOtherOpenSeats(leg: Leg, members: Member[], memberId: string): number {
+function legOtherOpenSeats(cars: Car[], members: Member[], memberId: string): number {
   let total = 0;
-  for (const car of leg.cars) {
+  for (const car of cars) {
     if (car.driverId === memberId) continue;
     const driverKids = new Set(members.find((m) => m.id === car.driverId)?.kids ?? []);
     const otherKidsInCar = car.kids.filter((k) => !driverKids.has(k)).length;
@@ -192,9 +192,11 @@ function legOtherOpenSeats(leg: Leg, members: Member[], memberId: string): numbe
 // none arranged) has no driving decision to reconsider, so it's skipped
 // even if some other car on it happens to have room.
 export function openSeatsFromOthers(carpool: Carpool, memberId: string): number {
-  const selfDrives = (leg: Leg) => leg.cars.some((c) => c.driverId === memberId);
+  const dropOffCars = carpool.dropOff?.cars ?? [];
+  const pickUpCars = carpool.pickUp?.cars ?? [];
+  const selfDrives = (cars: Car[]) => cars.some((c) => c.driverId === memberId);
   return Math.max(
-    selfDrives(carpool.dropOff) ? legOtherOpenSeats(carpool.dropOff, carpool.members, memberId) : 0,
-    selfDrives(carpool.pickUp) ? legOtherOpenSeats(carpool.pickUp, carpool.members, memberId) : 0
+    selfDrives(dropOffCars) ? legOtherOpenSeats(dropOffCars, carpool.members, memberId) : 0,
+    selfDrives(pickUpCars) ? legOtherOpenSeats(pickUpCars, carpool.members, memberId) : 0
   );
 }
