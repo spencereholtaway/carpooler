@@ -438,6 +438,12 @@ function LegAssignments({
   const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
     a.localeCompare(b)
   );
+  // Same resolution the AI summary and the by-parent view use, so this
+  // picker's "(default)" placeholder always names the actual default
+  // driver — not just whichever parent happens to be listed first for a
+  // shared kid, which parentsOf(kid)[0] alone can't tell apart from.
+  const kidDefaults = computeKidDefaults(carpool.members);
+  const kidToDriver = resolveKidDrivers(cars, carpool.members, kidDefaults);
   const driverFor = (kid: string) => cars.find((c) => c.kids.includes(kid))?.driverId ?? "";
   const parentsOf = (kid: string) => carpool.members.filter((m) => m.kids.includes(kid)).map((m) => m.name);
 
@@ -459,10 +465,10 @@ function LegAssignments({
           <tbody>
             {allKids.map((kid) => {
               const parents = parentsOf(kid);
-              // A kid with no explicit car still has a default ride: their
-              // own parent, if that parent is driving this leg — the picker
-              // should say so instead of showing a bare "Unassigned".
-              const defaultLabel = `${parents[0] ?? ""} (default)`;
+              const defaultDriverId = kidToDriver.get(kid);
+              const defaultDriverName =
+                carpool.members.find((m) => m.id === defaultDriverId)?.name ?? parents[0] ?? "";
+              const defaultLabel = `${defaultDriverName} (default)`;
               return (
                 <tr key={kid}>
                   <td>
@@ -507,12 +513,19 @@ function LegAssignmentsByParent({
 }) {
   const legData = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
   const cars = legData?.cars ?? [];
-  const drivers = carpool.members.filter((m) => (leg === "dropOff" ? m.canDriveDropOff : m.canDrivePickUp));
   const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
     a.localeCompare(b)
   );
   const kidDefaults = computeKidDefaults(carpool.members);
   const kidToDriver = resolveKidDrivers(cars, carpool.members, kidDefaults);
+  // A card belongs here if this member is either an explicit driver (has a
+  // car in this leg, even an empty one offering seats) or is currently the
+  // resolved default driver for at least one kid — same "you're always
+  // good for your own kid" fallback the AI summary and the by-kid view
+  // already use. Filtering by the canDrive toggle alone (the old behavior)
+  // silently dropped every default-only parent from this view entirely.
+  const cardDriverIds = new Set([...cars.map((c) => c.driverId), ...kidToDriver.values()]);
+  const drivers = carpool.members.filter((m) => cardDriverIds.has(m.id));
 
   return (
     <div className="admin-panel-leg-assignments">
@@ -522,7 +535,7 @@ function LegAssignmentsByParent({
       ) : (
         <div className="admin-car-list">
           {drivers.map((d) => {
-            const isExplicit = cars.some((c) => c.driverId === d.id);
+            const hasCar = cars.some((c) => c.driverId === d.id);
             const kids = allKids
               .filter((k) => kidToDriver.get(k) === d.id)
               .slice()
@@ -532,25 +545,34 @@ function LegAssignmentsByParent({
               .map((k) => ({ id: k, name: k }));
             return (
               <div className="admin-car-card" key={d.id}>
-                <div className="admin-car-card-header">{d.name}</div>
+                <div className="admin-car-card-header">
+                  {d.name}
+                  {!hasCar && <span className="admin-muted"> (not driving — showing default)</span>}
+                </div>
                 <div className="admin-car-card-kids">
                   {kids.length === 0 ? (
                     <span className="admin-muted">Nobody</span>
                   ) : (
                     kids.map((k) => {
-                      const isDefault = !isExplicit;
+                      // Explicit only if this specific kid sits in this
+                      // driver's own car — a driver can have a real car and
+                      // still be the *default* ride for one of their other
+                      // kids nobody's explicitly moved yet.
+                      const isDefault = !cars.some((c) => c.driverId === d.id && c.kids.includes(k));
                       return (
                         <span className="admin-member-chip" key={k}>
                           {k}
                           {isDefault && <span className="admin-muted"> (default)</span>}{" "}
-                          <button
-                            type="button"
-                            className="admin-chip-remove"
-                            title="Unassign"
-                            onClick={() => onMoveKid(k, null)}
-                          >
-                            &times;
-                          </button>
+                          {!isDefault && (
+                            <button
+                              type="button"
+                              className="admin-chip-remove"
+                              title="Unassign"
+                              onClick={() => onMoveKid(k, null)}
+                            >
+                              &times;
+                            </button>
+                          )}
                         </span>
                       );
                     })
