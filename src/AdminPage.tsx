@@ -36,6 +36,24 @@ type AdminCarpool = {
 
 type AdminUpdate = { id: string; text: string; createdAt: number };
 
+// Mirrors CarpoolDetail's LegToggleRow: seats double as the driving toggle
+// (0 = not driving this leg, 1+ = driving with that many free seats), so
+// admin edits the same one number the real app writes instead of a separate
+// checkbox that only ever set seats to a hardcoded 1.
+function SeatStepper({ seats, onChange }: { seats: number; onChange: (seats: number) => void }) {
+  return (
+    <span className="seat-stepper-compact">
+      <button type="button" onClick={() => onChange(Math.max(0, seats - 1))} disabled={seats === 0} aria-label="Fewer seats">
+        &minus;
+      </button>
+      <span className="seat-count">{seats}</span>
+      <button type="button" onClick={() => onChange(Math.min(8, seats + 1))} disabled={seats >= 8} aria-label="More seats">
+        +
+      </button>
+    </span>
+  );
+}
+
 function CopyableCode({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -774,8 +792,8 @@ export function AdminPage() {
       setSavingCarpool(false);
     }
   };
-  const setMemberDriving = (code: string, memberId: string, leg: "dropOff" | "pickUp", value: boolean) =>
-    callAdmin("setMemberDriving", { code, memberId, leg, value });
+  const setMemberSeats = (code: string, memberId: string, leg: "dropOff" | "pickUp", seats: number) =>
+    callAdmin("setMemberSeats", { code, memberId, leg, seats });
   const moveKid = (code: string, leg: "dropOff" | "pickUp", kid: string, driverId: string | null) =>
     callAdmin("moveKid", { code, leg, kid, driverId });
   const deleteCarpool = async (code: string) => {
@@ -1433,34 +1451,34 @@ export function AdminPage() {
                 <thead>
                   <tr>
                     <th>Member</th>
-                    <th>Drop-off</th>
-                    <th>Pick-up</th>
+                    <th>Drop-off free seats</th>
+                    <th>Pick-up free seats</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {liveEditingCarpool.members.map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.name}</td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={m.canDriveDropOff}
-                          onChange={() =>
-                            setMemberDriving(liveEditingCarpool.code, m.id, "dropOff", !m.canDriveDropOff)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={m.canDrivePickUp}
-                          onChange={() =>
-                            setMemberDriving(liveEditingCarpool.code, m.id, "pickUp", !m.canDrivePickUp)
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {liveEditingCarpool.members.map((m) => {
+                    const dropOffSeats =
+                      liveEditingCarpool.dropOff?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
+                    const pickUpSeats =
+                      liveEditingCarpool.pickUp?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
+                    return (
+                      <tr key={m.id}>
+                        <td>{m.name}</td>
+                        <td>
+                          <SeatStepper
+                            seats={dropOffSeats}
+                            onChange={(seats) => setMemberSeats(liveEditingCarpool.code, m.id, "dropOff", seats)}
+                          />
+                        </td>
+                        <td>
+                          <SeatStepper
+                            seats={pickUpSeats}
+                            onChange={(seats) => setMemberSeats(liveEditingCarpool.code, m.id, "pickUp", seats)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

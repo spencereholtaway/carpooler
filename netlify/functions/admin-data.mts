@@ -26,28 +26,31 @@ type Carpool = {
   timezone?: string;
 };
 
-// Keep a leg's car list in sync with a member's driving toggle: drop their
-// car if they can no longer drive it, or give them one (defaulting to their
-// own unclaimed kids) if they now can and don't have one yet — starting at 1
-// seat, same as pressing "+" once from off, since there's no profile default
-// to seed from. Mirrors syncCar in carpools-join.mts so admin toggles behave
-// the same as a member flipping their own toggle. An existing car's seat
-// count is left alone — that's a per-leg value edited directly, not
-// something a driving-toggle sync should clobber.
-function syncCar(leg: Leg, member: Member, canDrive: boolean) {
+function clampSeats(seats: unknown): number {
+  const n = Number(seats);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(8, Math.max(0, Math.round(n)));
+}
+
+// Like syncCar, but sets an explicit seat count instead of defaulting to 1 —
+// the admin panel's free-seats stepper mirrors the real driving-leg control
+// (0 means not driving, 1+ means driving with that many free seats), so it
+// needs to write the number the admin actually chose, not just flip a
+// boolean and let syncCar's default win.
+function setSeats(leg: Leg, member: Member, seats: number) {
   leg.cars ??= [];
-  if (!canDrive) {
+  if (seats <= 0) {
     leg.cars = leg.cars.filter((c) => c.driverId !== member.id);
+    return;
+  }
+  const existing = leg.cars.find((c) => c.driverId === member.id);
+  if (existing) {
+    existing.seats = seats;
     return;
   }
   const claimed = new Set(leg.cars.flatMap((c) => c.kids));
   const unclaimedOwnKids = member.kids.filter((k) => !claimed.has(k));
-  const existing = leg.cars.find((c) => c.driverId === member.id);
-  if (existing) {
-    if (unclaimedOwnKids.length > 0) existing.kids = [...existing.kids, ...unclaimedOwnKids];
-    return;
-  }
-  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids, seats: 1 });
+  leg.cars.push({ driverId: member.id, kids: unclaimedOwnKids, seats });
 }
 
 // Mirrors moveKid in CarpoolDetail.tsx: pull the kid out of whatever car
@@ -444,12 +447,12 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       await store.setJSON(`code:${code}`, carpool);
       return new Response("ok");
     }
-    case "setMemberDriving": {
-      const { code, memberId, leg, value } = body.payload as {
+    case "setMemberSeats": {
+      const { code, memberId, leg, seats } = body.payload as {
         code: string;
         memberId: string;
         leg: "dropOff" | "pickUp";
-        value: boolean;
+        seats: number;
       };
       const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
       if (!carpool) return new Response("Not found", { status: 404 });
@@ -457,9 +460,10 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       if (!member) return new Response("Member not found", { status: 404 });
       carpool.dropOff ??= { time: "", cars: [] };
       carpool.pickUp ??= { time: "", cars: [] };
-      if (leg === "dropOff") member.canDriveDropOff = value;
-      else member.canDrivePickUp = value;
-      syncCar(leg === "dropOff" ? carpool.dropOff : carpool.pickUp, member, value);
+      const clamped = clampSeats(seats);
+      if (leg === "dropOff") member.canDriveDropOff = clamped > 0;
+      else member.canDrivePickUp = clamped > 0;
+      setSeats(leg === "dropOff" ? carpool.dropOff : carpool.pickUp, member, clamped);
       await store.setJSON(`code:${code}`, carpool);
       return new Response("ok");
     }
