@@ -1266,6 +1266,17 @@ button {
   white-space: pre-wrap;
 }
 
+.updates-section {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.updates-section h3 {
+  margin: 0 0 16px;
+  text-align: center;
+}
+
 .coffee-link {
   display: inline-block;
 }

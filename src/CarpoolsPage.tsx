@@ -162,7 +162,6 @@ export function CarpoolsPage({
   );
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [showUpdates, setShowUpdates] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const joinInputRef = useRef<HTMLInputElement>(null);
 
@@ -484,14 +483,11 @@ export function CarpoolsPage({
       </BottomSheet>
 
       <footer className="carpools-footer">
-        <button type="button" className="text-link-footer" onClick={() => setShowUpdates(true)}>
-          What's new?
-        </button>
         <a href="mailto:blisspool-feedback@holtawaydesign.com">Feedback or Questions? Email us!</a>
         <BuyMeACoffeeLink className="coffee-link-footer" />
       </footer>
 
-      <UpdatesPage open={showUpdates} onClose={() => setShowUpdates(false)} />
+      <UpdatesPage />
     </div>
   );
 }
