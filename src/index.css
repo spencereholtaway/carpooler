@@ -2984,31 +2984,10 @@ button {
   font-size: 13px;
 }
 
-.admin-car-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.admin-car-card {
-  border: 1px solid var(--admin-border);
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.admin-car-card-header {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
 .admin-car-card-kids {
   display: flex;
   flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-
-.admin-car-card .admin-autosuggest {
-  max-width: 220px;
+  align-items: center;
 }
 
 .admin-kid-cell {

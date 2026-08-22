@@ -533,65 +533,83 @@ function LegAssignmentsByParent({
       {drivers.length === 0 ? (
         <p className="admin-muted">No one can drive {label.toLowerCase()} yet.</p>
       ) : (
-        <div className="admin-car-list">
-          {drivers.map((d) => {
-            const hasCar = cars.some((c) => c.driverId === d.id);
-            const kids = allKids
-              .filter((k) => kidToDriver.get(k) === d.id)
-              .slice()
-              .sort((a, b) => a.localeCompare(b));
-            const addOptions = allKids
-              .filter((k) => kidToDriver.get(k) !== d.id)
-              .map((k) => ({ id: k, name: k }));
-            return (
-              <div className="admin-car-card" key={d.id}>
-                <div className="admin-car-card-header">
-                  {d.name}
-                  {!hasCar && <span className="admin-muted"> (not driving — showing default)</span>}
-                </div>
-                <div className="admin-car-card-kids">
-                  {kids.length === 0 ? (
-                    <span className="admin-muted">Nobody</span>
-                  ) : (
-                    kids.map((k) => {
-                      // Explicit only if this specific kid sits in this
-                      // driver's own car — a driver can have a real car and
-                      // still be the *default* ride for one of their other
-                      // kids nobody's explicitly moved yet.
-                      const isDefault = !cars.some((c) => c.driverId === d.id && c.kids.includes(k));
-                      return (
-                        <span className="admin-member-chip" key={k}>
-                          {k}
-                          {isDefault && <span className="admin-muted"> (default)</span>}{" "}
-                          {!isDefault && (
-                            <button
-                              type="button"
-                              className="admin-chip-remove"
-                              title="Unassign"
-                              onClick={() => onMoveKid(k, null)}
-                            >
-                              &times;
-                            </button>
-                          )}
-                        </span>
-                      );
-                    })
-                  )}
-                </div>
-                {addOptions.length > 0 && (
-                  <NameAutosuggest
-                    key={`add-${leg}-${d.id}-${kids.length}`}
-                    options={addOptions}
-                    value=""
-                    onChange={(kid) => {
-                      if (kid) onMoveKid(kid, d.id);
-                    }}
-                    placeholder="Add kid..."
-                  />
-                )}
-              </div>
-            );
-          })}
+        <div className="admin-table-wrap">
+          <table className="admin-table admin-driving-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Kids in car</th>
+                <th>Add kid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drivers.map((d) => {
+                const hasCar = cars.some((c) => c.driverId === d.id);
+                const kids = allKids
+                  .filter((k) => kidToDriver.get(k) === d.id)
+                  .slice()
+                  .sort((a, b) => a.localeCompare(b));
+                const addOptions = allKids
+                  .filter((k) => kidToDriver.get(k) !== d.id)
+                  .map((k) => ({ id: k, name: k }));
+                return (
+                  <tr key={d.id}>
+                    <td>
+                      {d.name}
+                      {!hasCar && <div className="admin-muted">(not driving — showing default)</div>}
+                    </td>
+                    <td>
+                      <div className="admin-car-card-kids">
+                        {kids.length === 0 ? (
+                          <span className="admin-muted">Nobody</span>
+                        ) : (
+                          kids.map((k) => {
+                            // Explicit only if this specific kid sits in
+                            // this driver's own car — a driver can have a
+                            // real car and still be the *default* ride for
+                            // one of their other kids nobody's explicitly
+                            // moved yet.
+                            const isDefault = !cars.some(
+                              (c) => c.driverId === d.id && c.kids.includes(k)
+                            );
+                            return (
+                              <span className="admin-member-chip" key={k}>
+                                {k}
+                                {isDefault && <span className="admin-muted"> (default)</span>}{" "}
+                                {!isDefault && (
+                                  <button
+                                    type="button"
+                                    className="admin-chip-remove"
+                                    title="Unassign"
+                                    onClick={() => onMoveKid(k, null)}
+                                  >
+                                    &times;
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {addOptions.length > 0 && (
+                        <NameAutosuggest
+                          key={`add-${leg}-${d.id}-${kids.length}`}
+                          options={addOptions}
+                          value=""
+                          onChange={(kid) => {
+                            if (kid) onMoveKid(kid, d.id);
+                          }}
+                          placeholder="Add kid..."
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
