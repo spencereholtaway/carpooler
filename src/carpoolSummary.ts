@@ -188,15 +188,25 @@ function legOtherOpenSeats(cars: Car[], members: Member[], memberId: string): nu
 // The most free seats other members are offering on a leg this member is
 // themselves driving — flags "you don't have to drive this leg, someone
 // else already has room" for the specific drive that's actually theirs to
-// give up. A leg they're not driving (their kid already has a ride, or
-// none arranged) has no driving decision to reconsider, so it's skipped
-// even if some other car on it happens to have room.
+// give up. "Driving" here means the same thing the AI summary line means:
+// resolveKidDrivers says one of their own kids currently rides with them,
+// whether that's an explicit car or just the default "you're always good
+// for your own kid" fallback with no car at all — a defaulted parent with
+// zero commitment is exactly who most benefits from being told someone
+// else already has room. A leg where their kid already rides with someone
+// else has no driving decision to reconsider, so it's skipped even if some
+// other car on it happens to have room.
 export function openSeatsFromOthers(carpool: Carpool, memberId: string): number {
+  const self = carpool.members.find((m) => m.id === memberId);
+  if (!self) return 0;
+  const kidDefaults = computeKidDefaults(carpool.members);
   const dropOffCars = carpool.dropOff?.cars ?? [];
   const pickUpCars = carpool.pickUp?.cars ?? [];
-  const selfDrives = (cars: Car[]) => cars.some((c) => c.driverId === memberId);
+  const dropOffDrivers = resolveKidDrivers(dropOffCars, carpool.members, kidDefaults);
+  const pickUpDrivers = resolveKidDrivers(pickUpCars, carpool.members, kidDefaults);
+  const selfDrivesLeg = (drivers: Map<string, string>) => self.kids.some((k) => drivers.get(k) === memberId);
   return Math.max(
-    selfDrives(dropOffCars) ? legOtherOpenSeats(dropOffCars, carpool.members, memberId) : 0,
-    selfDrives(pickUpCars) ? legOtherOpenSeats(pickUpCars, carpool.members, memberId) : 0
+    selfDrivesLeg(dropOffDrivers) ? legOtherOpenSeats(dropOffCars, carpool.members, memberId) : 0,
+    selfDrivesLeg(pickUpDrivers) ? legOtherOpenSeats(pickUpCars, carpool.members, memberId) : 0
   );
 }
