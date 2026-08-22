@@ -15,3 +15,11 @@
   from = "/admin"
   to = "/index.html"
   status = 200
+
+# Belt-and-suspenders alongside the <meta robots> tag and robots.txt — this
+# header applies to every response (including non-HTML) so nothing on the
+# site gets indexed or crawled.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
