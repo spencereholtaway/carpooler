@@ -44,9 +44,13 @@ export function resolveKidDrivers<M extends { id: string; kids: string[] }>(
   const kidToDriver = new Map<string, string>();
   for (const car of cars) for (const k of car.kids) kidToDriver.set(k, car.driverId);
 
+  // A member having *some* car in this leg doesn't mean their own kid is
+  // covered — that car might be empty (e.g. a kid toggled off and back on
+  // via admin never re-syncs the car). assignedElsewhere already excludes
+  // any kid actually sitting in a car, including this member's own, so it's
+  // safe to check every member here rather than skipping ones with a car.
   const assignedElsewhere = new Set(kidToDriver.keys());
   for (const m of members) {
-    if (cars.some((c) => c.driverId === m.id)) continue;
     for (const k of m.kids) {
       if (!assignedElsewhere.has(k) && kidDefaults.get(k) === m.id) kidToDriver.set(k, m.id);
     }

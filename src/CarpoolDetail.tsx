@@ -274,9 +274,12 @@ function DrivingLeg({
 
   const rowData = members.map((m) => {
     const car = cars.find((c) => c.driverId === m.id);
-    const kids = car
-      ? car.kids
-      : m.kids.filter((k) => !assignedElsewhere.has(k) && kidDefaults.get(k) === m.id);
+    // A car existing doesn't mean this member's own kid is in it — that car
+    // might be empty (e.g. a kid toggled off and back on via admin never
+    // re-syncs the car). Fold in any of their own kids nobody else has
+    // claimed and who default to them, same as a member with no car at all.
+    const defaultOwnKids = m.kids.filter((k) => !assignedElsewhere.has(k) && kidDefaults.get(k) === m.id);
+    const kids = car ? [...car.kids, ...defaultOwnKids] : defaultOwnKids;
     const eligible = eligibleFor(m);
     // A car's seat count is directly "how many free seats do you have" —
     // seats offered to other people's kids. The driver's own kid(s) riding
