@@ -544,7 +544,6 @@ function LegAssignmentsByParent({
             </thead>
             <tbody>
               {drivers.map((d) => {
-                const hasCar = cars.some((c) => c.driverId === d.id);
                 const kids = allKids
                   .filter((k) => kidToDriver.get(k) === d.id)
                   .slice()
@@ -554,10 +553,7 @@ function LegAssignmentsByParent({
                   .map((k) => ({ id: k, name: k }));
                 return (
                   <tr key={d.id}>
-                    <td>
-                      {d.name}
-                      {!hasCar && <div className="admin-muted">(not driving — showing default)</div>}
-                    </td>
+                    <td>{d.name}</td>
                     <td>
                       <div className="admin-car-card-kids">
                         {kids.length === 0 ? (
