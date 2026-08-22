@@ -1,4 +1,5 @@
 import type { Car, Carpool, Member } from "./types";
+import { shortenName } from "./types";
 
 export function formatTime(time: string) {
   if (!time) return "no time set";
@@ -8,11 +9,14 @@ export function formatTime(time: string) {
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+// Names passed in here are shortened for display — the underlying kid/member
+// identifiers used elsewhere for matching are untouched.
 export function joinList(items: string[]): string {
-  if (items.length === 0) return "";
-  if (items.length === 1) return items[0];
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  const shortened = items.map(shortenName);
+  if (shortened.length === 0) return "";
+  if (shortened.length === 1) return shortened[0];
+  if (shortened.length === 2) return `${shortened[0]} and ${shortened[1]}`;
+  return `${shortened.slice(0, -1).join(", ")}, and ${shortened[shortened.length - 1]}`;
 }
 
 // When the same kid is listed on more than one member (shared between linked
@@ -96,7 +100,7 @@ function legSentences(
     }
   }
   for (const [driverId, kids] of otherGroups) {
-    const name = members.find((m) => m.id === driverId)?.name ?? "Someone";
+    const name = shortenName(members.find((m) => m.id === driverId)?.name ?? "Someone");
     sentences.push(
       leg === "dropOff"
         ? `${name} is taking ${joinList(kids)} there.`
@@ -152,7 +156,7 @@ export function summarizeCarpool(carpool: Carpool, memberId: string): string {
     .map(([driverId, kids]) => {
       const relevantKids = kids.filter((k) => self.kids.includes(k));
       if (relevantKids.length === 0) return null;
-      const name = carpool.members.find((m) => m.id === driverId)?.name ?? "Someone";
+      const name = shortenName(carpool.members.find((m) => m.id === driverId)?.name ?? "Someone");
       return `${name} is driving ${joinList(relevantKids)} both ways.`;
     })
     .filter((line): line is string => line !== null);

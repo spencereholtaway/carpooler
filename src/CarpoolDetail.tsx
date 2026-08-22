@@ -16,6 +16,7 @@ import {
   type Carpool,
   type DayOfWeek,
   type Member,
+  shortenName,
 } from "./types";
 import { useTypewriter } from "./useTypewriter";
 
@@ -303,7 +304,7 @@ function DrivingLeg({
       isCoParent,
       canMoveHere,
       movableKids,
-      displayName: isSelf ? "You" : m.name,
+      displayName: isSelf ? "You" : shortenName(m.name),
     };
   });
 
@@ -325,7 +326,7 @@ function DrivingLeg({
         free: mergedFree,
         movableKids,
         canMoveHere: movableKids.length > 0,
-        displayName: `You & ${coEntry.m.name}`,
+        displayName: `You & ${shortenName(coEntry.m.name)}`,
       };
       mergedRowData = [merged, ...rowData.filter((r) => !r.isSelf && r.m.id !== coParentId)];
     }
@@ -452,11 +453,16 @@ function DrivingLeg({
                       .filter((k) => myKids.has(k))
                       .map((k) => (
                         <span className="my-kid-pill" key={k}>
-                          {k}
+                          {shortenName(k)}
                         </span>
                       ))}
                     {kids.some((k) => !myKids.has(k)) && (
-                      <span className="muted">{kids.filter((k) => !myKids.has(k)).join(", ")}</span>
+                      <span className="muted">
+                        {kids
+                          .filter((k) => !myKids.has(k))
+                          .map(shortenName)
+                          .join(", ")}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -482,7 +488,7 @@ function DrivingLeg({
                         if (!expanded && closing) setClosingRow((c) => (c === m.id ? null : c));
                       }}
                     >
-                      Move {movableKids[0]} here
+                      Move {shortenName(movableKids[0])} here
                     </button>
                   )}
                 </div>
@@ -503,7 +509,7 @@ function DrivingLeg({
                         className={`kid-pick ${selectedKids.includes(kid) ? "active" : ""}`}
                         onClick={() => toggleSelect(kid)}
                       >
-                        {kid}
+                        {shortenName(kid)}
                       </button>
                     ))}
                   </div>

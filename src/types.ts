@@ -71,3 +71,12 @@ export function detectTimezone(): string {
     return DEFAULT_TIMEZONE;
   }
 }
+
+// Obscures every word after the first in a name (parent or kid) down to its
+// initial, for privacy on user-facing screens — "Mary Jane Smith" becomes
+// "Mary J. S.". A single-word name passes through unchanged.
+export function shortenName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  return [parts[0], ...parts.slice(1).map((p) => `${p[0]}.`)].join(" ");
+}
