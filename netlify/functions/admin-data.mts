@@ -163,19 +163,6 @@ async function generateOccurrences(store: ReturnType<typeof getStore>, series: C
     );
   }
 }
-async function pruneInvalidOccurrences(store: ReturnType<typeof getStore>, series: Carpool, fromDate: string) {
-  const horizonEnd = addDaysISO(todayISO(), GENERATION_HORIZON_DAYS);
-  const validDates = new Set(series.recurrenceEras.flatMap((era) => generateDatesForEra(era, horizonEnd)));
-  const occurrences = await listOccurrences(store, series.code);
-  await Promise.all(
-    occurrences.map(async (occ) => {
-      if (occ.historized) return;
-      if (isoCompare(occ.date, fromDate) < 0) return;
-      if (validDates.has(occ.date)) return;
-      await store.delete(`occ:${series.code}:${occ.date}`);
-    })
-  );
-}
 // A kid marked skipped for a specific occurrence must stay out of it even
 // when the era's own defaults get copied in — otherwise a later, unrelated
 // schedule change would silently un-skip them by copying them right back in.
@@ -646,28 +633,6 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const coParentId = (await store.get(`coparent:${memberId}`)) as string | null;
       if (!coParentId) return new Response("No linked co-parent", { status: 400 });
       await store.set(`combined:${pairKey(memberId, coParentId)}`, combined ? "true" : "false");
-      return new Response("ok");
-    }
-    case "updateCarpool": {
-      // The admin panel doesn't expose recurrence type or an era-split date
-      // picker — it always edits "starting today", in place, on whichever
-      // era covers today, same as before this schema existed.
-      const { code, name, day, destination, dropOffTime, pickUpTime } = body.payload;
-      const carpool = await loadSeries(store, code);
-      if (!carpool) return new Response("Not found", { status: 404 });
-      if (name !== undefined) carpool.name = name;
-      if (destination !== undefined) carpool.destination = destination;
-
-      const era = currentEra(carpool);
-      const validDay = (DAYS_OF_WEEK as readonly string[]).includes(day) ? (day as DayOfWeek) : era.daysOfWeek[0];
-      era.daysOfWeek = [validDay];
-      if (dropOffTime !== undefined) era.defaultDropOff.time = dropOffTime;
-      if (pickUpTime !== undefined) era.defaultPickUp.time = pickUpTime;
-
-      await store.setJSON(`code:${code}`, carpool);
-      await pruneInvalidOccurrences(store, carpool, todayISO());
-      await generateOccurrences(store, carpool);
-      await restampEra(store, carpool, era);
       return new Response("ok");
     }
     case "setMemberSeats": {
