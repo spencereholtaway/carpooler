@@ -761,6 +761,42 @@ export function CarpoolDetail({
     </>
   );
 
+  // Rendered twice (mobile/desktop), same trick as the AI summary and driving
+  // stops above — each copy sits right under this member's "who's driving
+  // who" text on its own layout instead of down in the "can you drive more
+  // kids" block.
+  const renderSkipKidLinks = (extraClassName: string) =>
+    realSelf && realSelf.kids.length > 0 && occurrence && (
+      <div className={`skip-kid-links ${extraClassName}`}>
+        {realSelf.kids.map((kid) => {
+          const isSkipped = (occurrence.skippedKids ?? []).includes(kid);
+          return (
+            <button
+              key={kid}
+              type="button"
+              className="text-link"
+              disabled={togglingSkipKid === kid}
+              onClick={async () => {
+                setTogglingSkipKid(kid);
+                try {
+                  const updatedOcc = await skipKid(carpool.code, occurrence.date, kid, !isSkipped, memberId);
+                  onOccurrenceUpdated(updatedOcc);
+                } finally {
+                  setTogglingSkipKid(null);
+                }
+              }}
+            >
+              {togglingSkipKid === kid
+                ? "Saving..."
+                : isSkipped
+                  ? `Add ${shortenName(kid)} back this week`
+                  : `${shortenName(kid)} isn't going this time`}
+            </button>
+          );
+        })}
+      </div>
+    );
+
   const openCarpoolEditor = () => {
     setDraftKids(realSelf?.kids ?? []);
     setDraftName(carpool.name);
@@ -1245,6 +1281,7 @@ export function CarpoolDetail({
                 </p>
               </div>
             )}
+            {renderSkipKidLinks("skip-kid-links-mobile-only")}
             {hasDrivingStops && (
               <div className="driving-stops-section driving-stops-mobile-only">{drivingStops}</div>
             )}
@@ -1291,43 +1328,13 @@ export function CarpoolDetail({
               )}
             </div>
           </div>
-          {realSelf && realSelf.kids.length > 0 && occurrence && (
-            <div className="skip-kid-links">
-              {realSelf.kids.map((kid) => {
-                const isSkipped = (occurrence.skippedKids ?? []).includes(kid);
-                return (
-                  <button
-                    key={kid}
-                    type="button"
-                    className="text-link"
-                    disabled={togglingSkipKid === kid}
-                    onClick={async () => {
-                      setTogglingSkipKid(kid);
-                      try {
-                        const updatedOcc = await skipKid(carpool.code, occurrence.date, kid, !isSkipped, memberId);
-                        onOccurrenceUpdated(updatedOcc);
-                      } finally {
-                        setTogglingSkipKid(null);
-                      }
-                    }}
-                  >
-                    {togglingSkipKid === kid
-                      ? "Saving..."
-                      : isSkipped
-                        ? `Add ${shortenName(kid)} back this week`
-                        : `${shortenName(kid)} isn't doing it this week`}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {!soloMember && (
           <>
             <BuyMeACoffeeLink className="coffee-link-sidebar" />
             <div className="invite-box">
-              <span className="invite-label">Invite code</span>
+              <span className="invite-label">Carpool invite code</span>
               <span className="invite-code">{carpool.code}</span>
               <button type="button" className="pill-button secondary" onClick={copyLink}>
                 {copied ? "Copied!" : "Copy invite link"}
@@ -1343,7 +1350,7 @@ export function CarpoolDetail({
             <h3 className="bliss-heading">You're the only one here so far</h3>
             <p className="muted">Share this code to get someone else driving with you.</p>
             <div className="invite-box invite-box-main">
-              <span className="invite-label">Invite code</span>
+              <span className="invite-label">Carpool invite code</span>
               <span className="invite-code">{carpool.code}</span>
               <button type="button" className="pill-button secondary" onClick={copyLink}>
                 {copied ? "Copied!" : "Copy invite link"}
@@ -1380,9 +1387,7 @@ export function CarpoolDetail({
             ) : (
               <h3 className="bliss-heading">Who's driving who?</h3>
             )}
-            {hasDrivingStops && (
-              <div className="driving-stops-section driving-stops-desktop-only">{drivingStops}</div>
-            )}
+            {renderSkipKidLinks("skip-kid-links-desktop-only")}
             <DrivingLeg
               label="Drop-off"
               time={carpool.dropOff?.time ?? ""}
@@ -1407,6 +1412,9 @@ export function CarpoolDetail({
               coParentId={household?.coParentId ?? null}
               householdCombined={household?.combined ?? false}
             />
+            {hasDrivingStops && (
+              <div className="driving-stops-section driving-stops-desktop-only">{drivingStops}</div>
+            )}
           </>
         )}
       </div>
