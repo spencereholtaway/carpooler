@@ -588,6 +588,7 @@ function DrivingLeg({
 export function CarpoolDetail({
   series,
   occurrences,
+  initialDate,
   memberId,
   allKids,
   onBack,
@@ -597,6 +598,7 @@ export function CarpoolDetail({
 }: {
   series: CarpoolSeries;
   occurrences: CarpoolOccurrence[];
+  initialDate?: string | null;
   memberId: string;
   allKids: string[];
   onBack: () => void;
@@ -605,7 +607,8 @@ export function CarpoolDetail({
   onCarpoolLeft: (code: string) => void;
 }) {
   // Which upcoming date this screen is showing/editing — defaults to the
-  // nearest one, same carpool the old single-schedule app always showed.
+  // nearest one, same carpool the old single-schedule app always showed,
+  // unless the list handed us the specific date the user tapped.
   // Every driver/seat/kid control below operates on this occurrence via
   // `carpool` (a flat view derived from series+occurrence), completely
   // unchanged from when that shape came straight from the server.
@@ -613,7 +616,7 @@ export function CarpoolDetail({
     .filter((o) => o.date >= todayISO() && !o.cancelled)
     .sort((a, b) => a.date.localeCompare(b.date));
   const defaultDate = pickRepresentativeOccurrence(occurrences)?.date;
-  const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [selectedDate, setSelectedDate] = useState(initialDate ?? defaultDate);
   const occurrence = occurrences.find((o) => o.date === selectedDate) ?? occurrences.find((o) => o.date === defaultDate);
   const isEditingDefaultOccurrence = !occurrence || occurrence.date === defaultDate;
   const carpool = toCarpoolView(series, occurrence);

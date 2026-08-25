@@ -61,13 +61,17 @@ function AmbientOrbs() {
 function App() {
   const { profile, memberId, loading, saveProfile, clearProfile, adoptMemberId } = useProfile();
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [carpools, setCarpools] = useState<CarpoolSeries[] | null>(null);
   const [occurrences, setOccurrences] = useState<CarpoolOccurrence[] | null>(null);
 
   // Tie the two top-level screens/overlays to browser history so the back
   // button and iOS/Android edge-swipe close them instead of leaving the app.
-  const closeCarpool = useBackable(Boolean(selectedCode), () => setSelectedCode(null));
+  const closeCarpool = useBackable(Boolean(selectedCode), () => {
+    setSelectedCode(null);
+    setSelectedDate(null);
+  });
   const closeProfileEditor = useBackable(editingProfile, () => setEditingProfile(false));
 
   // Replaces every occurrence belonging to `code` with `fresh` — every
@@ -89,6 +93,14 @@ function App() {
       return exists ? prev.map((c) => (c.code === carpool.code ? carpool : c)) : [...prev, carpool];
     });
     mergeOccurrences(carpool.code, fresh);
+  };
+
+  // Same as upsertCarpool, but also remembers which specific occurrence date
+  // was tapped in the list, so the detail view opens on that date instead of
+  // always falling back to the nearest upcoming one.
+  const openCarpool = (result: CarpoolResult, date?: string) => {
+    upsertCarpool(result);
+    setSelectedDate(date ?? null);
   };
 
   // Same cache refresh as upsertCarpool, but never navigates — used when a
@@ -188,6 +200,7 @@ function App() {
           <CarpoolDetail
             series={selectedCarpool}
             occurrences={selectedOccurrences}
+            initialDate={selectedDate}
             memberId={memberId}
             allKids={profile.kids}
             onBack={closeCarpool}
@@ -199,7 +212,7 @@ function App() {
           <CarpoolsPage
             memberId={memberId}
             profile={profile}
-            onOpenCarpool={upsertCarpool}
+            onOpenCarpool={openCarpool}
             carpools={carpools}
             occurrences={occurrences}
             onCarpoolsLoaded={(result) => {

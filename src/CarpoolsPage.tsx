@@ -198,7 +198,7 @@ export function CarpoolsPage({
 }: {
   memberId: string;
   profile: LocalProfile;
-  onOpenCarpool: (result: CarpoolResult) => void;
+  onOpenCarpool: (result: CarpoolResult, date?: string) => void;
   carpools: CarpoolSeries[] | null;
   occurrences: CarpoolOccurrence[] | null;
   onCarpoolsLoaded: (result: { carpools: CarpoolSeries[]; occurrences: CarpoolOccurrence[] }) => void;
@@ -428,7 +428,12 @@ export function CarpoolsPage({
               row={row}
               summary={summarizeCarpool(toCarpoolView(row.series, row.occurrence), memberId) || "Nothing arranged yet."}
               openSeats={openSeatsFromOthers(toCarpoolView(row.series, row.occurrence), memberId)}
-              onOpen={() => onOpenCarpool({ carpool: row.series, occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [] })}
+              onOpen={() =>
+                onOpenCarpool(
+                  { carpool: row.series, occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [] },
+                  row.occurrence.date
+                )
+              }
               start={i <= typedCount}
               onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
               showCursor={i === todayRows.length - 1}
@@ -449,10 +454,13 @@ export function CarpoolsPage({
                 const carpool = toCarpoolView(row.series, row.occurrence);
                 const ghost = isFullySkipped(row);
                 const openCarpool = () =>
-                  onOpenCarpool({
-                    carpool: row.series,
-                    occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [],
-                  });
+                  onOpenCarpool(
+                    {
+                      carpool: row.series,
+                      occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [],
+                    },
+                    row.occurrence.date
+                  );
 
                 if (ghost) {
                   // Skipped entirely — a quiet FYI, not a summary. Dashed
