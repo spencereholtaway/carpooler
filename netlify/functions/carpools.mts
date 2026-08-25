@@ -71,7 +71,7 @@ type LegacyCarpool = {
 };
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
-const GENERATION_HORIZON_DAYS = 56; // 8 weeks ahead (4 real occurrences for a biweekly carpool)
+const GENERATION_HORIZON_DAYS = 90; // ~3 months ahead
 
 function randomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();

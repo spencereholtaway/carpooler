@@ -70,7 +70,7 @@ type LegacyCarpool = {
 };
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
-const GENERATION_HORIZON_DAYS = 56;
+const GENERATION_HORIZON_DAYS = 90; // ~3 months ahead
 
 function clampSeats(seats: unknown): number {
   const n = Number(seats);
