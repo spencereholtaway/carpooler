@@ -907,6 +907,22 @@ export function CarpoolDetail({
     return true;
   };
 
+  // Whether anything in the sheet actually differs from what's saved —
+  // gates showing a Save button at all, so opening the editor and closing it
+  // without touching anything doesn't dangle an always-live button.
+  const hasUnsavedChanges = () => {
+    const { structureChanged, timeChanged } = scheduleDiff();
+    const nameChanged = draftName.trim() !== carpool.name;
+    const streetChanged = draftStreet.trim() !== (carpool.destination?.street ?? "");
+    const zipChanged = draftZip.trim() !== (carpool.destination?.zip ?? "");
+    const timezoneChanged = draftTimezone !== (carpool.timezone || detectTimezone());
+    const kidsChanged =
+      JSON.stringify([...draftKids].sort()) !== JSON.stringify([...(realSelf?.kids ?? [])].sort());
+    return (
+      structureChanged || timeChanged || nameChanged || streetChanged || zipChanged || timezoneChanged || kidsChanged
+    );
+  };
+
   // Saving with no kids left selected doesn't mean "nothing arranged" — it
   // means you're not in this carpool anymore. Confirm that before it happens
   // instead of saving straight through, regardless of which button triggered it.
@@ -1220,13 +1236,6 @@ export function CarpoolDetail({
           <>
             {self && youSummary && (
               <div className="ai-summary ai-summary-mobile-only">
-                <span className="ai-summary-badge">
-                  <span className="ai-summary-sparkle" aria-hidden="true">
-                    ✨
-                  </span>
-                  <span className="ai-summary-name">blisspoolAI</span>
-                  <span className="ai-summary-live" aria-hidden="true" />
-                </span>
                 <p className="ai-summary-quote">
                   {typedSummary}
                   <span
@@ -1360,13 +1369,6 @@ export function CarpoolDetail({
           <>
             {self && youSummary ? (
               <div className="ai-summary ai-summary-desktop-only">
-                <span className="ai-summary-badge">
-                  <span className="ai-summary-sparkle" aria-hidden="true">
-                    ✨
-                  </span>
-                  <span className="ai-summary-name">blisspoolAI</span>
-                  <span className="ai-summary-live" aria-hidden="true" />
-                </span>
                 <p className="ai-summary-quote">
                   {typedSummary}
                   <span
@@ -1412,28 +1414,11 @@ export function CarpoolDetail({
       <BottomSheet
         open={editingCarpool}
         onClose={closeCarpoolEditor}
-        title="Edit carpool"
+        title={`Edit ${carpool.name}`}
         footer={
           scheduleAmbiguous() ? (
             <>
-              {justThisOneAvailable && (
-                <button
-                  type="button"
-                  className="pill-button"
-                  onClick={() => handleScopeClick("occurrence")}
-                  disabled={saving}
-                >
-                  {applyingScope === "occurrence" ? "Saving..." : `Just ${occurrence?.date}`}
-                </button>
-              )}
-              <button
-                type="button"
-                className="pill-button secondary"
-                onClick={() => handleScopeClick("future")}
-                disabled={saving}
-              >
-                From {occurrence?.date} forward
-              </button>
+              <span className="sheet-footer-label">Save changes</span>
               <button
                 type="button"
                 className="pill-button secondary"
@@ -1442,12 +1427,33 @@ export function CarpoolDetail({
               >
                 All events
               </button>
+              <button
+                type="button"
+                className="pill-button secondary"
+                onClick={() => handleScopeClick("future")}
+                disabled={saving}
+              >
+                This event forward
+              </button>
+              {justThisOneAvailable && (
+                <button
+                  type="button"
+                  className="pill-button"
+                  onClick={() => handleScopeClick("occurrence")}
+                  disabled={saving}
+                >
+                  {applyingScope === "occurrence" ? "Saving..." : "Just this event"}
+                </button>
+              )}
             </>
-          ) : (
-            <button type="button" className="pill-button" onClick={handlePlainSave} disabled={saving}>
-              {saving ? "Saving..." : "Save"}
-            </button>
-          )
+          ) : hasUnsavedChanges() ? (
+            <>
+              <span className="sheet-footer-label">Save changes</span>
+              <button type="button" className="pill-button" onClick={handlePlainSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </>
+          ) : undefined
         }
       >
         <div className="form-field">
@@ -1456,24 +1462,24 @@ export function CarpoolDetail({
         </div>
         <div className="form-field">
           <span className="gate-field-label">How often</span>
-          <div className="kid-tags">
+          <div className="segmented-group">
             <button
               type="button"
-              className={`kid-pick ${draftRecurrenceType === "weekly" ? "active" : ""}`}
+              className={`segmented-btn ${draftRecurrenceType === "weekly" ? "active" : ""}`}
               onClick={() => setDraftRecurrenceType("weekly")}
             >
               Every week
             </button>
             <button
               type="button"
-              className={`kid-pick ${draftRecurrenceType === "biweekly" ? "active" : ""}`}
+              className={`segmented-btn ${draftRecurrenceType === "biweekly" ? "active" : ""}`}
               onClick={() => setDraftRecurrenceType("biweekly")}
             >
               Every other week
             </button>
             <button
               type="button"
-              className={`kid-pick ${draftRecurrenceType === "oneoff" ? "active" : ""}`}
+              className={`segmented-btn ${draftRecurrenceType === "oneoff" ? "active" : ""}`}
               onClick={() => setDraftRecurrenceType("oneoff")}
             >
               Just once
@@ -1483,12 +1489,12 @@ export function CarpoolDetail({
         {draftRecurrenceType !== "oneoff" && (
           <div className="form-field">
             <span className="gate-field-label">Which day(s)</span>
-            <div className="kid-tags">
+            <div className="segmented-group">
               {DAYS_OF_WEEK.map((d) => (
                 <button
                   type="button"
                   key={d}
-                  className={`kid-pick ${draftDaysOfWeek.includes(d) ? "active" : ""}`}
+                  className={`segmented-btn ${draftDaysOfWeek.includes(d) ? "active" : ""}`}
                   onClick={() =>
                     setDraftDaysOfWeek((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))
                   }
@@ -1510,23 +1516,25 @@ export function CarpoolDetail({
             />
           </div>
         )}
-        <div className="form-field">
-          <span className="gate-field-label">Drop-off time</span>
-          <input
-            type="time"
-            value={draftDropOffTime}
-            onChange={(e) => setDraftDropOffTime(e.target.value)}
-            onInvalid={(e) => e.preventDefault()}
-          />
-        </div>
-        <div className="form-field">
-          <span className="gate-field-label">Pick-up time</span>
-          <input
-            type="time"
-            value={draftPickUpTime}
-            onChange={(e) => setDraftPickUpTime(e.target.value)}
-            onInvalid={(e) => e.preventDefault()}
-          />
+        <div className="field-row">
+          <div className="form-field">
+            <span className="gate-field-label">Drop-off time</span>
+            <input
+              type="time"
+              value={draftDropOffTime}
+              onChange={(e) => setDraftDropOffTime(e.target.value)}
+              onInvalid={(e) => e.preventDefault()}
+            />
+          </div>
+          <div className="form-field">
+            <span className="gate-field-label">Pick-up time</span>
+            <input
+              type="time"
+              value={draftPickUpTime}
+              onChange={(e) => setDraftPickUpTime(e.target.value)}
+              onInvalid={(e) => e.preventDefault()}
+            />
+          </div>
         </div>
         <div className="form-field">
           <span className="gate-field-label">Street address</span>

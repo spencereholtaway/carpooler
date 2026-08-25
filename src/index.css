@@ -544,6 +544,14 @@ button {
   color: var(--text);
 }
 
+.sheet-footer-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .gate-field-label-bold {
   font-weight: 600;
 }
@@ -611,6 +619,38 @@ button {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+}
+
+/* A connected, equal-width segmented control — used for "How often" and
+   "Which day(s)" so every option gets the same width and the whole group
+   fits on one line instead of wrapping like the variable-width kid-pick
+   tags. */
+.segmented-group {
+  display: flex;
+  border: 1px solid rgba(139, 123, 184, 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.segmented-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border: none;
+  border-right: 1px solid rgba(139, 123, 184, 0.3);
+  background: var(--glass-bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.segmented-btn:last-child {
+  border-right: none;
+}
+
+.segmented-btn.active {
+  background: linear-gradient(100deg, #8b7bb8, #c98fa6);
+  color: #fff;
 }
 
 .kid-tag {
@@ -1645,6 +1685,9 @@ button {
   padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .bottom-sheet-footer .pill-button {
@@ -1667,6 +1710,12 @@ button {
   .bottom-sheet-footer {
     padding: 14px 20px;
     border-radius: 0 0 24px 24px;
+  }
+
+  .bottom-sheet-footer .pill-button {
+    padding: 10px 16px;
+    font-size: 13px;
+    box-shadow: none;
   }
 }
 
