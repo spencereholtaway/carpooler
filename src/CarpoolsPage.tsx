@@ -598,24 +598,24 @@ export function CarpoolsPage({
         </div>
         <div className="form-field">
           <span className="gate-field-label">How often</span>
-          <div className="kid-tags">
+          <div className="segmented-group">
             <button
               type="button"
-              className={`kid-pick ${recurrenceType === "weekly" ? "active" : ""}`}
+              className={`segmented-btn ${recurrenceType === "weekly" ? "active" : ""}`}
               onClick={() => setRecurrenceType("weekly")}
             >
               Every week
             </button>
             <button
               type="button"
-              className={`kid-pick ${recurrenceType === "biweekly" ? "active" : ""}`}
+              className={`segmented-btn ${recurrenceType === "biweekly" ? "active" : ""}`}
               onClick={() => setRecurrenceType("biweekly")}
             >
               Every other week
             </button>
             <button
               type="button"
-              className={`kid-pick ${recurrenceType === "oneoff" ? "active" : ""}`}
+              className={`segmented-btn ${recurrenceType === "oneoff" ? "active" : ""}`}
               onClick={() => setRecurrenceType("oneoff")}
             >
               Just once
@@ -625,12 +625,12 @@ export function CarpoolsPage({
         {recurrenceType !== "oneoff" && (
           <div className="form-field">
             <span className="gate-field-label">Which day(s)</span>
-            <div className="kid-tags">
+            <div className="segmented-group">
               {DAYS_OF_WEEK.map((d) => (
                 <button
                   type="button"
                   key={d}
-                  className={`kid-pick ${daysOfWeek.includes(d) ? "active" : ""}`}
+                  className={`segmented-btn ${daysOfWeek.includes(d) ? "active" : ""}`}
                   onClick={() => toggleDay(d)}
                 >
                   {d.slice(0, 3)}
@@ -642,24 +642,24 @@ export function CarpoolsPage({
         {recurrenceType !== "oneoff" && daysOfWeek.length > 0 && (
           <div className="form-field">
             <span className="gate-field-label">Starting</span>
-            <div className="kid-tags">
+            <div className="segmented-group">
               <button
                 type="button"
-                className={`kid-pick ${startMode === "thisWeek" ? "active" : ""}`}
+                className={`segmented-btn ${startMode === "thisWeek" ? "active" : ""}`}
                 onClick={() => setStartMode("thisWeek")}
               >
                 This week
               </button>
               <button
                 type="button"
-                className={`kid-pick ${startMode === "nextWeek" ? "active" : ""}`}
+                className={`segmented-btn ${startMode === "nextWeek" ? "active" : ""}`}
                 onClick={() => setStartMode("nextWeek")}
               >
                 Next week
               </button>
               <button
                 type="button"
-                className={`kid-pick ${startMode === "other" ? "active" : ""}`}
+                className={`segmented-btn ${startMode === "other" ? "active" : ""}`}
                 onClick={() => setStartMode("other")}
               >
                 Other
@@ -695,25 +695,27 @@ export function CarpoolsPage({
           <span className="gate-field-label">Zip code</span>
           <input value={destZip} onChange={(e) => setDestZip(e.target.value)} inputMode="numeric" />
         </div>
-        <div className="form-field">
-          <span className="gate-field-label">Usual drop-off time</span>
-          <input
-            type="time"
-            value={dropOffTime}
-            onChange={(e) => setDropOffTime(e.target.value)}
-            onInvalid={(e) => e.preventDefault()}
-          />
+        <div className="field-row">
+          <div className="form-field">
+            <span className="gate-field-label">Usual drop-off time</span>
+            <input
+              type="time"
+              value={dropOffTime}
+              onChange={(e) => setDropOffTime(e.target.value)}
+              onInvalid={(e) => e.preventDefault()}
+            />
+          </div>
+          <div className="form-field">
+            <span className="gate-field-label">Usual pick-up time</span>
+            <input
+              type="time"
+              value={pickUpTime}
+              onChange={(e) => setPickUpTime(e.target.value)}
+              onInvalid={(e) => e.preventDefault()}
+            />
+          </div>
         </div>
-        <div className="form-field">
-          <span className="gate-field-label">Usual pick-up time</span>
-          <input
-            type="time"
-            value={pickUpTime}
-            onChange={(e) => setPickUpTime(e.target.value)}
-            onInvalid={(e) => e.preventDefault()}
-          />
-          <span className="muted">We know things change — you'll be able to update each event once you create the carpool.</span>
-        </div>
+        <span className="muted">We know things change — you'll be able to update each event once you create the carpool.</span>
         <div className="form-field">
           <span className="gate-field-label">Timezone</span>
           <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
