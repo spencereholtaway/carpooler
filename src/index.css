@@ -2714,6 +2714,12 @@ button {
   color: var(--admin-text);
 }
 
+.admin-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .admin-tabs {
   display: flex;
   gap: 8px;
@@ -2866,6 +2872,11 @@ button {
 
 .admin-filter-select {
   flex: none;
+  width: auto;
+}
+
+.admin-header-filter {
+  margin-left: auto;
 }
 
 .admin-member-chip {
