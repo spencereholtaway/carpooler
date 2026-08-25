@@ -983,7 +983,7 @@ export function CarpoolDetail({
   const confirmScopeAndSave = () => {
     if (!confirmingScope) return;
     const scope = confirmingScope;
-    setConfirmingScope(null);
+    closeConfirmingScope();
     commitSave(scope);
   };
 
