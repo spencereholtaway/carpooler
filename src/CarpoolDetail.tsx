@@ -790,7 +790,7 @@ export function CarpoolDetail({
                 ? "Saving..."
                 : isSkipped
                   ? `Add ${shortenName(kid)} back this week`
-                  : `${shortenName(kid)} isn't going this time`}
+                  : "Not going this time? Click here"}
             </button>
           );
         })}
