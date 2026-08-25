@@ -813,7 +813,7 @@ export function AdminPage() {
   };
 
   const [userSearch, setUserSearch] = useState("");
-  const [userTestFilter, setUserTestFilter] = useState<TestAccountFilter>("all");
+  const [testAccountFilter, setTestAccountFilter] = useState<TestAccountFilter>("all");
   const [carpoolSearch, setCarpoolSearch] = useState("");
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -974,7 +974,23 @@ export function AdminPage() {
     ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
     : [];
 
-  const filteredUserGroups = filterUserGroups(groupUsersByCoParent(users), userSearch, userTestFilter);
+  const filteredUserGroups = filterUserGroups(groupUsersByCoParent(users), userSearch, testAccountFilter);
+
+  // The top-level test-account filter also scopes DataViz: a carpool
+  // counts as "test" if any member is flagged (same permissive rule
+  // groupIsTestAccount uses for the Users list), so a mixed household
+  // doesn't silently vanish from either view.
+  const testMemberIds = new Set(users.filter((u) => u.isTestAccount).map((u) => u.memberId));
+  const datavizUsers =
+    testAccountFilter === "all"
+      ? users
+      : users.filter((u) => Boolean(u.isTestAccount) === (testAccountFilter === "test"));
+  const datavizCarpools =
+    testAccountFilter === "all"
+      ? carpools
+      : carpools.filter(
+          (c) => c.members.some((m) => testMemberIds.has(m.id)) === (testAccountFilter === "test")
+        );
   const filteredCarpools = filterCarpools(carpools, carpoolSearch);
 
   if (!key) {
@@ -1003,20 +1019,31 @@ export function AdminPage() {
       <header className="admin-header">
         <div className="admin-container">
           <span className="admin-logo">Blisspool Admin</span>
-          <nav className="admin-tabs">
-            <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
-              Users ({users.length})
-            </button>
-            <button className={tab === "carpools" ? "active" : ""} onClick={() => setTab("carpools")}>
-              Carpools ({carpools.length})
-            </button>
-            <button className={tab === "updates" ? "active" : ""} onClick={() => setTab("updates")}>
-              Updates ({updates.length})
-            </button>
-            <button className={tab === "dataviz" ? "active" : ""} onClick={() => setTab("dataviz")}>
-              DataViz
-            </button>
-          </nav>
+          <div className="admin-tabs-row">
+            <nav className="admin-tabs">
+              <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
+                Users ({users.length})
+              </button>
+              <button className={tab === "carpools" ? "active" : ""} onClick={() => setTab("carpools")}>
+                Carpools ({carpools.length})
+              </button>
+              <button className={tab === "updates" ? "active" : ""} onClick={() => setTab("updates")}>
+                Updates ({updates.length})
+              </button>
+              <button className={tab === "dataviz" ? "active" : ""} onClick={() => setTab("dataviz")}>
+                DataViz
+              </button>
+            </nav>
+            <select
+              className="admin-filter-select admin-header-filter"
+              value={testAccountFilter}
+              onChange={(e) => setTestAccountFilter(e.target.value as TestAccountFilter)}
+            >
+              <option value="all">All</option>
+              <option value="real">No text</option>
+              <option value="test">Test</option>
+            </select>
+          </div>
           {tab === "dataviz" && (
             <nav className="admin-subtabs">
               {DATAVIZ_TABS.map((t) => (
@@ -1048,15 +1075,6 @@ export function AdminPage() {
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
               />
-              <select
-                className="admin-filter-select"
-                value={userTestFilter}
-                onChange={(e) => setUserTestFilter(e.target.value as TestAccountFilter)}
-              >
-                <option value="all">All</option>
-                <option value="real">No text</option>
-                <option value="test">Test</option>
-              </select>
               <button type="button" onClick={openAddUser}>
                 + Add user
               </button>
@@ -1224,7 +1242,7 @@ export function AdminPage() {
         )}
 
         {!loading && tab === "dataviz" && (
-          <AdminDatavizPanel users={users} carpools={carpools} subTab={datavizTab} />
+          <AdminDatavizPanel users={datavizUsers} carpools={datavizCarpools} subTab={datavizTab} />
         )}
         </div>
       </main>
