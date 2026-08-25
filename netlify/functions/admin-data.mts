@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-type ServerProfile = { name: string; kids: string[]; street: string; zip: string };
+type ServerProfile = { name: string; kids: string[]; street: string; zip: string; isTestAccount?: boolean };
 type Member = {
   id: string;
   name: string;
@@ -415,9 +415,9 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
   switch (body.action) {
     case "createUser": {
-      const { name, kids, street, zip } = body.payload;
+      const { name, kids, street, zip, isTestAccount } = body.payload;
       const memberId = crypto.randomUUID();
-      const profile: ServerProfile = { name, kids: kids ?? [], street, zip };
+      const profile: ServerProfile = { name, kids: kids ?? [], street, zip, isTestAccount: !!isTestAccount };
       await store.setJSON(`profile:${memberId}`, profile);
       await store.setJSON(`member:${memberId}`, []);
       await ensureHouseholdCode(store, memberId);
@@ -427,9 +427,9 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       });
     }
     case "updateUser": {
-      const { memberId, name, kids, street, zip } = body.payload;
+      const { memberId, name, kids, street, zip, isTestAccount } = body.payload;
       const oldProfile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
-      const profile: ServerProfile = { name, kids, street, zip };
+      const profile: ServerProfile = { name, kids, street, zip, isTestAccount: !!isTestAccount };
 
       // Mirrors the merge in profile.mts's POST handler: a kid added here
       // should also reach a linked co-parent's profile, and vice versa,

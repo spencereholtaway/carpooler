@@ -27,6 +27,7 @@ type AdminUser = {
   coParentName?: string | null;
   householdCombined?: boolean;
   coParentCode?: string | null;
+  isTestAccount?: boolean;
 };
 
 type AdminMember = {
@@ -251,6 +252,13 @@ function combinedKids(group: AdminUser[]): string[] {
   return Array.from(new Set(group.flatMap((u) => u.kids ?? [])));
 }
 
+// Sort key for "last name alphabetical" default ordering — the last
+// whitespace-separated word of the name, so "Spencer Holtaway" sorts under H.
+function lastNameOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return (words[words.length - 1] ?? name).toLowerCase();
+}
+
 function formatAddress(u: AdminUser): string {
   if (!u.street && !u.zip) return "—";
   return [u.street, u.zip].filter(Boolean).join(", ");
@@ -266,13 +274,39 @@ function groupAddressLines(group: AdminUser[]): string[] {
   return allSame ? [formatAddress(group[0])] : group.map(formatAddress);
 }
 
+type TestAccountFilter = "all" | "test" | "real";
+
+// A group counts as a "test" group if any member in it is flagged — a
+// household with a real co-parent and a test co-parent is rare enough that
+// erring toward showing it under "Test" (rather than hiding it) is the
+// safer default for an admin scanning for accounts to clean up.
+function groupIsTestAccount(group: AdminUser[]): boolean {
+  return group.some((u) => u.isTestAccount);
+}
+
+function matchesTestAccountFilter(group: AdminUser[], filter: TestAccountFilter): boolean {
+  if (filter === "all") return true;
+  return groupIsTestAccount(group) === (filter === "test");
+}
+
 // Users tab: match spans name, kids, and address, in that priority order,
 // so a hit on name always outranks a hit on kids, which always outranks a
-// hit on address — the most identifying field decides the sort order.
-function filterUserGroups(groups: AdminUser[][], query: string): AdminUser[][] {
+// hit on address — the most identifying field decides the sort order. With
+// no search text, groups default to last-name-alphabetical order instead of
+// whatever order the server happened to return them in.
+function filterUserGroups(
+  groups: AdminUser[][],
+  query: string,
+  testFilter: TestAccountFilter = "all"
+): AdminUser[][] {
+  const filtered = groups.filter((group) => matchesTestAccountFilter(group, testFilter));
   const q = query.trim();
-  if (!q) return groups;
-  return groups
+  if (!q) {
+    return filtered
+      .slice()
+      .sort((a, b) => lastNameOf(a[0].name).localeCompare(lastNameOf(b[0].name)));
+  }
+  return filtered
     .map((group) => {
       const fields = [
         ...group.map((u) => ({ value: u.name, priority: 0 })),
@@ -754,11 +788,11 @@ export function AdminPage() {
     await callUpdates("deleteUpdate", { id });
   };
 
-  const [newUser, setNewUser] = useState({ name: "", kids: "", street: "", zip: "" });
+  const [newUser, setNewUser] = useState({ name: "", kids: "", street: "", zip: "", isTestAccount: false });
   const [addingUser, setAddingUser] = useState(false);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const openAddUser = () => {
-    setNewUser({ name: "", kids: "", street: "", zip: "" });
+    setNewUser({ name: "", kids: "", street: "", zip: "", isTestAccount: false });
     setAddUserOpen(true);
   };
   const createUser = async () => {
@@ -770,6 +804,7 @@ export function AdminPage() {
         kids: newUser.kids.split(",").map((k) => k.trim()).filter(Boolean),
         street: newUser.street,
         zip: newUser.zip,
+        isTestAccount: newUser.isTestAccount,
       });
       setAddUserOpen(false);
     } finally {
@@ -778,6 +813,7 @@ export function AdminPage() {
   };
 
   const [userSearch, setUserSearch] = useState("");
+  const [userTestFilter, setUserTestFilter] = useState<TestAccountFilter>("all");
   const [carpoolSearch, setCarpoolSearch] = useState("");
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -798,6 +834,7 @@ export function AdminPage() {
         kids: userDraft.kids,
         street: userDraft.street,
         zip: userDraft.zip,
+        isTestAccount: userDraft.isTestAccount,
       });
       setEditingUser(null);
     } finally {
@@ -937,7 +974,7 @@ export function AdminPage() {
     ? carpools.filter((c) => c.members.some((m) => m.id === liveEditingUser.memberId))
     : [];
 
-  const filteredUserGroups = filterUserGroups(groupUsersByCoParent(users), userSearch);
+  const filteredUserGroups = filterUserGroups(groupUsersByCoParent(users), userSearch, userTestFilter);
   const filteredCarpools = filterCarpools(carpools, carpoolSearch);
 
   if (!key) {
@@ -1011,6 +1048,15 @@ export function AdminPage() {
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
               />
+              <select
+                className="admin-filter-select"
+                value={userTestFilter}
+                onChange={(e) => setUserTestFilter(e.target.value as TestAccountFilter)}
+              >
+                <option value="all">All</option>
+                <option value="real">No text</option>
+                <option value="test">Test</option>
+              </select>
               <button type="button" onClick={openAddUser}>
                 + Add user
               </button>
@@ -1039,6 +1085,7 @@ export function AdminPage() {
                               onClick={() => startEditUser(u)}
                             >
                               <HighlightedText text={u.name} query={userSearch} />
+                              {u.isTestAccount && <span className="admin-muted"> (test)</span>}
                             </span>
                           ))}
                         </div>
@@ -1231,6 +1278,14 @@ export function AdminPage() {
                 onChange={(e) => setUserDraft({ ...userDraft, zip: e.target.value })}
               />
             </label>
+            <label className="admin-checkbox-label">
+              <input
+                type="checkbox"
+                checked={userDraft.isTestAccount ?? false}
+                onChange={(e) => setUserDraft({ ...userDraft, isTestAccount: e.target.checked })}
+              />
+              Test account (not a real carpooler)
+            </label>
             <p className="admin-mono">{userDraft.memberId}</p>
 
             {liveEditingUser && (
@@ -1356,6 +1411,14 @@ export function AdminPage() {
           <label>
             Zip
             <input value={newUser.zip} onChange={(e) => setNewUser({ ...newUser, zip: e.target.value })} />
+          </label>
+          <label className="admin-checkbox-label">
+            <input
+              type="checkbox"
+              checked={newUser.isTestAccount}
+              onChange={(e) => setNewUser({ ...newUser, isTestAccount: e.target.checked })}
+            />
+            Test account (not a real carpooler)
           </label>
         </div>
       </SidePanel>
