@@ -2,10 +2,17 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { computeKidDefaults, resolveKidDrivers } from "./carpoolSummary";
 import { AdminDatavizPanel, DATAVIZ_TABS, type DatavizTab } from "./AdminDataviz";
 import {
+  COMMON_TIMEZONES,
+  DAYS_OF_WEEK,
+  currentEra,
+  detectTimezone,
   pickRepresentativeOccurrence,
+  todayISO,
   toCarpoolView,
   type CarpoolOccurrence,
   type CarpoolSeries,
+  type DayOfWeek,
+  type RecurrenceType,
 } from "./types";
 
 const KEY_STORAGE = "blisspool:admin-key";
@@ -38,25 +45,31 @@ type AdminCarpool = {
   pickUp?: { time: string; cars: { driverId: string; kids: string[]; seats: number }[] };
   members: AdminMember[];
   createdAt: number;
+  timezone: string;
+  recurrenceType: RecurrenceType;
+  daysOfWeek: DayOfWeek[];
+  eraStartDate: string;
 };
 
 type AdminUpdate = { id: string; text: string; createdAt: number };
 
 // The admin GET now returns CarpoolSeries + CarpoolOccurrence separately —
 // converted back into the flat AdminCarpool shape (the series' nearest
-// upcoming occurrence's dropOff/pickUp) at this one fetch boundary, so every
-// existing admin edit/view below keeps working unchanged against "the
-// current schedule," same as it did when that shape came straight off the
-// wire. Every admin mutation below (updateCarpool, setMemberSeats, moveKid,
-// etc.) still sends the exact same request shape it always did — only this
-// GET's response shape changed.
+// upcoming occurrence's dropOff/pickUp, plus the series' current era's
+// recurrence fields) at this one fetch boundary, so every existing admin
+// edit/view below keeps working unchanged against "the current schedule,"
+// same as it did when that shape came straight off the wire.
 function toAdminCarpools(series: CarpoolSeries[], occurrences: CarpoolOccurrence[]): AdminCarpool[] {
   const byCode = new Map<string, CarpoolOccurrence[]>();
   for (const o of occurrences) {
     if (!byCode.has(o.code)) byCode.set(o.code, []);
     byCode.get(o.code)!.push(o);
   }
-  return series.map((s) => toCarpoolView(s, pickRepresentativeOccurrence(byCode.get(s.code) ?? [])));
+  return series.map((s) => {
+    const view = toCarpoolView(s, pickRepresentativeOccurrence(byCode.get(s.code) ?? []));
+    const era = currentEra(s);
+    return { ...view, timezone: s.timezone, recurrenceType: era.type, daysOfWeek: era.daysOfWeek, eraStartDate: era.startDate };
+  });
 }
 
 // Mirrors CarpoolDetail's LegToggleRow: seats double as the driving toggle
@@ -828,24 +841,55 @@ export function AdminPage() {
       destination: { ...(c.destination ?? { street: "", zip: "" }) },
       dropOff: { time: c.dropOff?.time ?? "", cars: c.dropOff?.cars ?? [] },
       pickUp: { time: c.pickUp?.time ?? "", cars: c.pickUp?.cars ?? [] },
+      timezone: c.timezone || detectTimezone(),
+      recurrenceType: c.recurrenceType,
+      daysOfWeek: c.daysOfWeek,
+      eraStartDate: c.eraStartDate,
     });
     setAddMemberSelection("");
     setHouseholdKidSearch("");
     setLegTab("dropOff");
     setLegViewMode("kid");
   };
+  // Calls the same /api/carpools/schedule endpoint the real edit-carpool
+  // sheet uses (CarpoolDetail's updateCarpoolSchedule/updateCarpoolLabel),
+  // instead of admin-data's own flat day/time mutation, so admin can change
+  // recurrence type, day(s), and one-off dates the exact same way a user
+  // can — including the "this and all future, starting <date>" era-split
+  // semantics that a single mutate-in-place field can't express.
+  const callSchedule = async (payload: unknown) => {
+    const res = await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  };
   const saveCarpool = async () => {
     if (!carpoolDraft) return;
     setSavingCarpool(true);
     try {
-      await callAdmin("updateCarpool", {
+      await callSchedule({
         code: carpoolDraft.code,
+        scope: "all",
         name: carpoolDraft.name,
-        day: carpoolDraft.day,
         destination: carpoolDraft.destination,
-        dropOffTime: carpoolDraft.dropOff?.time ?? "",
-        pickUpTime: carpoolDraft.pickUp?.time ?? "",
+        timezone: carpoolDraft.timezone,
       });
+      // A day-of-week/frequency/time change can never be retroactive — it
+      // always takes effect starting today (or the picked date, for a
+      // one-off), same as the "This event forward" scope in the real app.
+      const startDate = carpoolDraft.recurrenceType === "oneoff" ? carpoolDraft.eraStartDate : todayISO();
+      await callSchedule({
+        code: carpoolDraft.code,
+        scope: "thisAndFuture",
+        startDate,
+        type: carpoolDraft.recurrenceType,
+        daysOfWeek: carpoolDraft.recurrenceType === "oneoff" ? undefined : carpoolDraft.daysOfWeek,
+        dropOff: { time: carpoolDraft.dropOff?.time ?? "", cars: carpoolDraft.dropOff?.cars ?? [] },
+        pickUp: { time: carpoolDraft.pickUp?.time ?? "", cars: carpoolDraft.pickUp?.cars ?? [] },
+      });
+      await load(key);
       setEditingCarpool(null);
     } finally {
       setSavingCarpool(false);
@@ -1366,13 +1410,6 @@ export function AdminPage() {
                 />
               </label>
               <label>
-                Day
-                <input
-                  value={carpoolDraft.day}
-                  onChange={(e) => setCarpoolDraft({ ...carpoolDraft, day: e.target.value })}
-                />
-              </label>
-              <label>
                 Drop-off time
                 <input
                   type="time"
@@ -1401,6 +1438,57 @@ export function AdminPage() {
             </div>
             <div className="admin-form-row">
               <label>
+                How often
+                <div className="segmented-group">
+                  {(["weekly", "biweekly", "oneoff"] as RecurrenceType[]).map((t) => (
+                    <button
+                      type="button"
+                      key={t}
+                      className={`segmented-btn ${carpoolDraft.recurrenceType === t ? "active" : ""}`}
+                      onClick={() => setCarpoolDraft({ ...carpoolDraft, recurrenceType: t })}
+                    >
+                      {t === "weekly" ? "Every week" : t === "biweekly" ? "Every other week" : "Just once"}
+                    </button>
+                  ))}
+                </div>
+              </label>
+              {carpoolDraft.recurrenceType === "oneoff" ? (
+                <label>
+                  Date
+                  <input
+                    type="date"
+                    value={carpoolDraft.eraStartDate}
+                    min={todayISO()}
+                    onChange={(e) => setCarpoolDraft({ ...carpoolDraft, eraStartDate: e.target.value })}
+                  />
+                </label>
+              ) : (
+                <label>
+                  Which day(s)
+                  <div className="segmented-group">
+                    {DAYS_OF_WEEK.map((d) => (
+                      <button
+                        type="button"
+                        key={d}
+                        className={`segmented-btn ${carpoolDraft.daysOfWeek.includes(d) ? "active" : ""}`}
+                        onClick={() =>
+                          setCarpoolDraft({
+                            ...carpoolDraft,
+                            daysOfWeek: carpoolDraft.daysOfWeek.includes(d)
+                              ? carpoolDraft.daysOfWeek.filter((x) => x !== d)
+                              : [...carpoolDraft.daysOfWeek, d],
+                          })
+                        }
+                      >
+                        {d.slice(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              )}
+            </div>
+            <div className="admin-form-row">
+              <label>
                 Destination street
                 <input
                   value={carpoolDraft.destination?.street ?? ""}
@@ -1423,6 +1511,22 @@ export function AdminPage() {
                     })
                   }
                 />
+              </label>
+              <label>
+                Timezone
+                <select
+                  value={carpoolDraft.timezone}
+                  onChange={(e) => setCarpoolDraft({ ...carpoolDraft, timezone: e.target.value })}
+                >
+                  {(COMMON_TIMEZONES.some((tz) => tz.value === carpoolDraft.timezone)
+                    ? COMMON_TIMEZONES
+                    : [{ value: carpoolDraft.timezone, label: carpoolDraft.timezone }, ...COMMON_TIMEZONES]
+                  ).map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <p>
