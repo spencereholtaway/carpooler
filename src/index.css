@@ -1613,7 +1613,9 @@ button {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  /* Above .driving-stops-mobile-only's fixed z-index: 25, or the mobile
+     drive bar shows through an open sheet instead of being covered by it. */
+  z-index: 28;
   display: flex;
   align-items: flex-end;
   justify-content: center;
