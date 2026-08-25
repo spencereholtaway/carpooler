@@ -14,7 +14,46 @@ type Member = {
 type Car = { driverId: string; kids: string[]; seats: number };
 type Leg = { time: string; cars: Car[] };
 type Address = { street: string; zip: string };
+
+const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+type DayOfWeek = (typeof DAYS_OF_WEEK)[number];
+const DAY_INDEX: Record<DayOfWeek, number> = Object.fromEntries(DAYS_OF_WEEK.map((d, i) => [d, i])) as Record<
+  DayOfWeek,
+  number
+>;
+
+type RecurrenceType = "weekly" | "biweekly" | "oneoff";
+type RecurrenceEra = {
+  startDate: string;
+  endDate: string | null;
+  type: RecurrenceType;
+  daysOfWeek: DayOfWeek[];
+  defaultDropOff: Leg;
+  defaultPickUp: Leg;
+};
 type Carpool = {
+  code: string;
+  name: string;
+  destination: Address;
+  recurrenceEras: RecurrenceEra[];
+  members: Member[];
+  createdAt: number;
+  timezone?: string;
+};
+type CarpoolOccurrence = {
+  code: string;
+  date: string;
+  dropOff: Leg;
+  pickUp: Leg;
+  overridden: { dropOff: boolean; pickUp: boolean };
+  historized: boolean;
+  // Kids not participating in this specific occurrence (e.g. a trip that
+  // day) — removed from every car on both legs; excluded from the
+  // unclaimed-kid-defaults-to-own-parent fallback everywhere it's computed.
+  skippedKids?: string[];
+  generatedAt: number;
+};
+type LegacyCarpool = {
   code: string;
   name: string;
   day: string;
@@ -23,8 +62,178 @@ type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
-  timezone?: string;
+  timezone: string;
 };
+
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+const GENERATION_HORIZON_DAYS = 56;
+
+// ---- date helpers + migration/generation (see carpools.mts for the fuller
+// comments — duplicated here per this repo's no-shared-modules convention) ----
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function isoCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function weekdayIndexISO(iso: string): number {
+  return (new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7;
+}
+function mondayOfISO(iso: string): string {
+  return addDaysISO(iso, -weekdayIndexISO(iso));
+}
+function weeksBetweenMondays(a: string, b: string): number {
+  return Math.round((new Date(a + "T00:00:00Z").getTime() - new Date(b + "T00:00:00Z").getTime()) / (7 * 86400000));
+}
+function nextDateForWeekday(day: DayOfWeek): string {
+  const today = todayISO();
+  const diff = (DAY_INDEX[day] - weekdayIndexISO(today) + 7) % 7;
+  return addDaysISO(today, diff);
+}
+function generateDatesForEra(era: RecurrenceEra, horizonEndISO: string): string[] {
+  if (era.type === "oneoff") return [era.startDate];
+  const today = todayISO();
+  const scanStart = isoCompare(era.startDate, today) > 0 ? era.startDate : today;
+  const scanEnd = era.endDate && isoCompare(era.endDate, horizonEndISO) < 0 ? era.endDate : horizonEndISO;
+  if (isoCompare(scanStart, scanEnd) > 0) return [];
+  const eraMonday = mondayOfISO(era.startDate);
+  const wantedDays = new Set(era.daysOfWeek.map((d) => DAY_INDEX[d]));
+  const dates: string[] = [];
+  for (let d = scanStart; isoCompare(d, scanEnd) <= 0; d = addDaysISO(d, 1)) {
+    if (!wantedDays.has(weekdayIndexISO(d))) continue;
+    if (era.type === "biweekly" && weeksBetweenMondays(mondayOfISO(d), eraMonday) % 2 !== 0) continue;
+    dates.push(d);
+  }
+  return dates;
+}
+function isLegacyShape(blob: unknown): blob is LegacyCarpool {
+  return !!blob && typeof blob === "object" && "day" in (blob as object) && !("recurrenceEras" in (blob as object));
+}
+function migrateLegacyCarpool(legacy: LegacyCarpool): Carpool {
+  const day = (DAYS_OF_WEEK as readonly string[]).includes(legacy.day) ? (legacy.day as DayOfWeek) : "Monday";
+  return {
+    code: legacy.code,
+    name: legacy.name,
+    destination: legacy.destination,
+    recurrenceEras: [
+      {
+        startDate: nextDateForWeekday(day),
+        endDate: null,
+        type: "weekly",
+        daysOfWeek: [day],
+        defaultDropOff: legacy.dropOff,
+        defaultPickUp: legacy.pickUp,
+      },
+    ],
+    members: legacy.members,
+    createdAt: legacy.createdAt,
+    timezone: legacy.timezone || DEFAULT_TIMEZONE,
+  };
+}
+async function listOccurrences(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolOccurrence[]> {
+  const { blobs } = await store.list({ prefix: `occ:${code}:` });
+  const occs = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
+  return occs.filter(Boolean) as CarpoolOccurrence[];
+}
+async function generateOccurrences(store: ReturnType<typeof getStore>, series: Carpool): Promise<void> {
+  const horizonEnd = addDaysISO(todayISO(), GENERATION_HORIZON_DAYS);
+  for (const era of series.recurrenceEras) {
+    const dates = generateDatesForEra(era, horizonEnd);
+    await Promise.all(
+      dates.map(async (date) => {
+        const occKey = `occ:${series.code}:${date}`;
+        if (await store.get(occKey, { type: "json" })) return;
+        const occurrence: CarpoolOccurrence = {
+          code: series.code,
+          date,
+          dropOff: { time: era.defaultDropOff.time, cars: era.defaultDropOff.cars.map((c) => ({ ...c, kids: [...c.kids] })) },
+          pickUp: { time: era.defaultPickUp.time, cars: era.defaultPickUp.cars.map((c) => ({ ...c, kids: [...c.kids] })) },
+          overridden: { dropOff: false, pickUp: false },
+          historized: false,
+          skippedKids: [],
+          generatedAt: Date.now(),
+        };
+        await store.setJSON(occKey, occurrence);
+      })
+    );
+  }
+}
+async function pruneInvalidOccurrences(store: ReturnType<typeof getStore>, series: Carpool, fromDate: string) {
+  const horizonEnd = addDaysISO(todayISO(), GENERATION_HORIZON_DAYS);
+  const validDates = new Set(series.recurrenceEras.flatMap((era) => generateDatesForEra(era, horizonEnd)));
+  const occurrences = await listOccurrences(store, series.code);
+  await Promise.all(
+    occurrences.map(async (occ) => {
+      if (occ.historized) return;
+      if (isoCompare(occ.date, fromDate) < 0) return;
+      if (validDates.has(occ.date)) return;
+      await store.delete(`occ:${series.code}:${occ.date}`);
+    })
+  );
+}
+// A kid marked skipped for a specific occurrence must stay out of it even
+// when the era's own defaults get copied in — otherwise a later, unrelated
+// schedule change would silently un-skip them by copying them right back in.
+function withoutSkipped(cars: Car[], skippedKids: string[] | undefined): Car[] {
+  if (!skippedKids || skippedKids.length === 0) return cars.map((c) => ({ ...c, kids: [...c.kids] }));
+  const skip = new Set(skippedKids);
+  return cars.map((c) => ({ ...c, kids: c.kids.filter((k) => !skip.has(k)) }));
+}
+
+async function restampEra(store: ReturnType<typeof getStore>, series: Carpool, era: RecurrenceEra) {
+  const today = todayISO();
+  const occurrences = await listOccurrences(store, series.code);
+  await Promise.all(
+    occurrences.map(async (occ) => {
+      if (isoCompare(occ.date, today) < 0) return;
+      if (isoCompare(occ.date, era.startDate) < 0) return;
+      if (era.endDate && isoCompare(occ.date, era.endDate) > 0) return;
+      let changed = false;
+      if (!occ.overridden.dropOff) {
+        occ.dropOff = { time: era.defaultDropOff.time, cars: withoutSkipped(era.defaultDropOff.cars, occ.skippedKids) };
+        changed = true;
+      }
+      if (!occ.overridden.pickUp) {
+        occ.pickUp = { time: era.defaultPickUp.time, cars: withoutSkipped(era.defaultPickUp.cars, occ.skippedKids) };
+        changed = true;
+      }
+      if (changed) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
+    })
+  );
+}
+// Reads+migrates a series by code, same as carpools.mts's loadSeries.
+async function loadSeries(store: ReturnType<typeof getStore>, code: string): Promise<Carpool | null> {
+  const raw = await store.get(`code:${code}`, { type: "json" });
+  if (!raw) return null;
+  let series: Carpool;
+  if (isLegacyShape(raw)) {
+    series = migrateLegacyCarpool(raw);
+    await store.setJSON(`code:${code}`, series);
+  } else {
+    series = raw as Carpool;
+  }
+  await generateOccurrences(store, series);
+  return series;
+}
+function currentEra(series: Carpool): RecurrenceEra {
+  const today = todayISO();
+  let found = series.recurrenceEras[0];
+  for (const era of series.recurrenceEras) {
+    if (isoCompare(era.startDate, today) <= 0) found = era;
+  }
+  return found;
+}
+// After mutating the current era's defaults, push the change into every
+// future not-individually-overridden occurrence it governs.
+async function applyEraChange(store: ReturnType<typeof getStore>, series: Carpool, era: RecurrenceEra) {
+  await store.setJSON(`code:${series.code}`, series);
+  await restampEra(store, series, era);
+}
 
 function clampSeats(seats: unknown): number {
   const n = Number(seats);
@@ -126,7 +335,7 @@ async function backfillCoParentIntoCarpools(
 
   const codes = ((await store.get(`member:${ownerId}`, { type: "json" })) as string[] | null) ?? [];
   for (const code of codes) {
-    const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+    const carpool = await loadSeries(store, code);
     if (!carpool || carpool.members.some((m) => m.id === coParentId)) continue;
 
     const owner = carpool.members.find((m) => m.id === ownerId);
@@ -193,13 +402,11 @@ async function removeCodeFromMember(store: ReturnType<typeof getStore>, memberId
   await store.setJSON(`member:${memberId}`, codes.filter((c) => c !== code));
 }
 
-function dropMember(carpool: Carpool, memberId: string) {
+function dropMember(carpool: Carpool, era: RecurrenceEra, memberId: string) {
   const leaving = carpool.members.find((m) => m.id === memberId);
   carpool.members = carpool.members.filter((m) => m.id !== memberId);
-  carpool.dropOff ??= { time: "", cars: [] };
-  carpool.pickUp ??= { time: "", cars: [] };
-  carpool.dropOff.cars = (carpool.dropOff.cars ?? []).filter((c) => c.driverId !== memberId);
-  carpool.pickUp.cars = (carpool.pickUp.cars ?? []).filter((c) => c.driverId !== memberId);
+  era.defaultDropOff.cars = era.defaultDropOff.cars.filter((c) => c.driverId !== memberId);
+  era.defaultPickUp.cars = era.defaultPickUp.cars.filter((c) => c.driverId !== memberId);
 
   // Their kid(s) may still be sitting in someone else's car from an earlier
   // move — unless a co-parent still legitimately claims them, that ride is
@@ -208,7 +415,7 @@ function dropMember(carpool: Carpool, memberId: string) {
   const kidsToClear = (leaving?.kids ?? []).filter((k) => !stillOwned.has(k));
   if (kidsToClear.length > 0) {
     const removeSet = new Set(kidsToClear);
-    for (const leg of [carpool.dropOff, carpool.pickUp]) {
+    for (const leg of [era.defaultDropOff, era.defaultPickUp]) {
       leg.cars = leg.cars.map((c) => ({ ...c, kids: c.kids.filter((k) => !removeSet.has(k)) }));
     }
   }
@@ -262,7 +469,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
       for (const code of codes) {
-        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        const carpool = await loadSeries(store, code);
         if (!carpool) continue;
         const m = carpool.members.find((mm) => mm.id === memberId);
         if (!m) continue;
@@ -328,7 +535,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const conflicts: { code: string; name: string; leg: "dropOff" | "pickUp" }[] = [];
 
       for (const code of codes) {
-        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        const carpool = await loadSeries(store, code);
         if (!carpool) continue;
         let changed = false;
 
@@ -339,9 +546,10 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
           changed = true;
         }
 
+        const era = currentEra(carpool);
         for (const [legName, leg] of [
-          ["dropOff", carpool.dropOff],
-          ["pickUp", carpool.pickUp],
+          ["dropOff", era.defaultDropOff],
+          ["pickUp", era.defaultPickUp],
         ] as const) {
           const oldCar = leg?.cars?.find((c) => c.kids.includes(oldName));
           if (!oldCar) continue;
@@ -357,6 +565,12 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
         if (changed) {
           await store.setJSON(`code:${code}`, carpool);
+          // Also pushes the (unconflicted) rename into every future
+          // not-overridden occurrence — restampEra only ever reflects the
+          // era's actual current defaults, so a leg that hit a conflict
+          // above (and so was never actually changed) is simply re-stamped
+          // unchanged, which is a no-op for that leg.
+          await restampEra(store, carpool, era);
           carpoolsUpdated.push({ code, name: carpool.name });
         }
       }
@@ -369,10 +583,11 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       const { memberId } = body.payload;
       const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
       for (const code of codes) {
-        const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+        const carpool = await loadSeries(store, code);
         if (!carpool) continue;
-        dropMember(carpool, memberId);
-        await store.setJSON(`code:${code}`, carpool);
+        const era = currentEra(carpool);
+        dropMember(carpool, era, memberId);
+        await applyEraChange(store, carpool, era);
       }
       const profile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
       if (profile) {
@@ -434,17 +649,25 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       return new Response("ok");
     }
     case "updateCarpool": {
+      // The admin panel doesn't expose recurrence type or an era-split date
+      // picker — it always edits "starting today", in place, on whichever
+      // era covers today, same as before this schema existed.
       const { code, name, day, destination, dropOffTime, pickUpTime } = body.payload;
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
-      carpool.name = name;
-      carpool.day = day;
-      carpool.destination = destination;
-      carpool.dropOff ??= { time: "", cars: [] };
-      carpool.pickUp ??= { time: "", cars: [] };
-      if (dropOffTime !== undefined) carpool.dropOff.time = dropOffTime;
-      if (pickUpTime !== undefined) carpool.pickUp.time = pickUpTime;
+      if (name !== undefined) carpool.name = name;
+      if (destination !== undefined) carpool.destination = destination;
+
+      const era = currentEra(carpool);
+      const validDay = (DAYS_OF_WEEK as readonly string[]).includes(day) ? (day as DayOfWeek) : era.daysOfWeek[0];
+      era.daysOfWeek = [validDay];
+      if (dropOffTime !== undefined) era.defaultDropOff.time = dropOffTime;
+      if (pickUpTime !== undefined) era.defaultPickUp.time = pickUpTime;
+
       await store.setJSON(`code:${code}`, carpool);
+      await pruneInvalidOccurrences(store, carpool, todayISO());
+      await generateOccurrences(store, carpool);
+      await restampEra(store, carpool, era);
       return new Response("ok");
     }
     case "setMemberSeats": {
@@ -454,17 +677,16 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         leg: "dropOff" | "pickUp";
         seats: number;
       };
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
       const member = carpool.members.find((m) => m.id === memberId);
       if (!member) return new Response("Member not found", { status: 404 });
-      carpool.dropOff ??= { time: "", cars: [] };
-      carpool.pickUp ??= { time: "", cars: [] };
+      const era = currentEra(carpool);
       const clamped = clampSeats(seats);
       if (leg === "dropOff") member.canDriveDropOff = clamped > 0;
       else member.canDrivePickUp = clamped > 0;
-      setSeats(leg === "dropOff" ? carpool.dropOff : carpool.pickUp, member, clamped);
-      await store.setJSON(`code:${code}`, carpool);
+      setSeats(leg === "dropOff" ? era.defaultDropOff : era.defaultPickUp, member, clamped);
+      await applyEraChange(store, carpool, era);
       return new Response("ok");
     }
     case "moveKid": {
@@ -474,27 +696,28 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         kid: string;
         driverId: string | null;
       };
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
-      carpool.dropOff ??= { time: "", cars: [] };
-      carpool.pickUp ??= { time: "", cars: [] };
-      const target = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
+      const era = currentEra(carpool);
+      const target = leg === "dropOff" ? era.defaultDropOff : era.defaultPickUp;
       target.cars = moveKidCar(target.cars ?? [], kid, driverId, 1);
-      await store.setJSON(`code:${code}`, carpool);
+      await applyEraChange(store, carpool, era);
       return new Response("ok");
     }
     case "deleteCarpool": {
       const { code } = body.payload;
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = (await store.get(`code:${code}`, { type: "json" })) as { members: Member[] } | null;
       if (carpool) {
         for (const m of carpool.members) await removeCodeFromMember(store, m.id, code);
       }
       await store.delete(`code:${code}`);
+      const { blobs } = await store.list({ prefix: `occ:${code}:` });
+      await Promise.all(blobs.map((b) => store.delete(b.key)));
       return new Response("ok");
     }
     case "addMember": {
       const { code, memberId } = body.payload;
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
       if (carpool.members.some((m) => m.id === memberId)) return new Response("ok");
 
@@ -539,19 +762,18 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         on: boolean;
       };
       if (!code || !memberIds?.length || !kid) return new Response("Invalid payload", { status: 400 });
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
-      carpool.dropOff ??= { time: "", cars: [] };
-      carpool.pickUp ??= { time: "", cars: [] };
+      const era = currentEra(carpool);
 
       if (!on) {
         for (const m of carpool.members) {
           if (memberIds.includes(m.id)) m.kids = m.kids.filter((k) => k !== kid);
         }
-        for (const leg of [carpool.dropOff, carpool.pickUp]) {
+        for (const leg of [era.defaultDropOff, era.defaultPickUp]) {
           leg.cars = (leg.cars ?? []).map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) }));
         }
-        await store.setJSON(`code:${code}`, carpool);
+        await applyEraChange(store, carpool, era);
         return new Response("ok");
       }
 
@@ -578,15 +800,16 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       }
 
       await autoAddCoParentToCarpool(store, carpool, actingMemberId, [kid]);
-      await store.setJSON(`code:${code}`, carpool);
+      await applyEraChange(store, carpool, era);
       return new Response("ok");
     }
     case "removeMember": {
       const { code, memberId } = body.payload;
-      const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+      const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
-      dropMember(carpool, memberId);
-      await store.setJSON(`code:${code}`, carpool);
+      const era = currentEra(carpool);
+      dropMember(carpool, era, memberId);
+      await applyEraChange(store, carpool, era);
       await removeCodeFromMember(store, memberId, code);
       return new Response("ok");
     }
@@ -625,10 +848,20 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
         }
       }
 
+      // This backfill predates (and is unaffected by) the dates-not-days
+      // schema migration — every car it could possibly touch either already
+      // has `seats` or belongs to a carpool from before per-leg seats
+      // existed, long since backfilled. It reads the legacy top-level
+      // dropOff/pickUp shape directly and deliberately doesn't call
+      // loadSeries: on an already-migrated (new-shape) blob, `.dropOff`
+      // is simply undefined and `leg?.cars ?? []` safely no-ops rather than
+      // crashing, which is exactly the do-nothing behavior wanted here.
       const { blobs: codeBlobs } = await store.list({ prefix: "code:" });
       let carsUpdated = 0;
       for (const b of codeBlobs) {
-        const carpool = (await store.get(b.key, { type: "json" })) as Carpool | null;
+        const carpool = (await store.get(b.key, { type: "json" })) as
+          | (Omit<Carpool, "recurrenceEras"> & { dropOff?: Leg; pickUp?: Leg })
+          | null;
         if (!carpool) continue;
         let changed = false;
 
@@ -680,7 +913,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 
         const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
         for (const code of codes) {
-          const carpool = (await store.get(`code:${code}`, { type: "json" })) as Carpool | null;
+          const carpool = await loadSeries(store, code);
           const m = carpool?.members.find((mm) => mm.id === memberId);
           if (!carpool || !m) continue;
           if (m.name === profile.name && m.street === profile.street && m.zip === profile.zip) {
@@ -887,7 +1120,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 }
 
 export default async (req: Request) => {
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
 
   if (req.method === "POST") return handleMutation(store, req);
 
@@ -922,10 +1155,11 @@ export default async (req: Request) => {
 
   const { blobs: codeBlobs } = await store.list({ prefix: "code:" });
   const carpools = (
-    await Promise.all(codeBlobs.map((b) => store.get(b.key, { type: "json" })))
+    await Promise.all(codeBlobs.map((b) => loadSeries(store, b.key.slice("code:".length))))
   ).filter(Boolean) as Carpool[];
+  const occurrences = (await Promise.all(carpools.map((c) => listOccurrences(store, c.code)))).flat();
 
-  return new Response(JSON.stringify({ users, carpools }), {
+  return new Response(JSON.stringify({ users, carpools, occurrences }), {
     headers: { "Content-Type": "application/json" },
   });
 };

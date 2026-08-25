@@ -25,7 +25,7 @@ async function ensureHouseholdCode(store: ReturnType<typeof getStore>, memberId:
 }
 
 export default async (req: Request) => {
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
 
   if (req.method === "GET") {
     const memberId = new URL(req.url).searchParams.get("memberId");

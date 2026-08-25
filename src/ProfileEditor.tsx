@@ -1,7 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined } from "./api";
+import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined, type CarpoolResult } from "./api";
 import type { LocalProfile } from "./useProfile";
-import type { Carpool } from "./types";
 import { BottomSheet } from "./BottomSheet";
 
 export function ProfileEditor({
@@ -14,7 +13,7 @@ export function ProfileEditor({
   memberId: string;
   profile: LocalProfile;
   onSaved: (profile: LocalProfile) => void;
-  onCarpoolUpdated: (carpool: Carpool) => void;
+  onCarpoolUpdated: (result: CarpoolResult) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(profile.name);
@@ -128,18 +127,18 @@ export function ProfileEditor({
       // this edit was opened from) doesn't keep showing pre-edit values like
       // name until the user navigates away and back. Per-leg car capacity
       // lives on the carpool itself now, so it isn't touched here.
-      const carpools = await listCarpools(memberId);
+      const { carpools } = await listCarpools(memberId);
       await Promise.all(
         carpools.map(async (c) => {
           const self = c.members.find((m) => m.id === memberId);
           if (!self) return;
-          const updatedCarpool = await joinCarpool(c.code, {
+          const result = await joinCarpool(c.code, {
             ...self,
             name: updated.name,
             street: updated.street,
             zip: updated.zip,
           });
-          onCarpoolUpdated(updatedCarpool);
+          onCarpoolUpdated(result);
         })
       );
 

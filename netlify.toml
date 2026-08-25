@@ -8,6 +8,13 @@
   port = 8888
   autoLaunch = false
 
+# Local `netlify dev` only reads/writes a separate "carpools-dev" Blobs store
+# so in-progress schema/migration work on this branch can never touch real
+# production data, even by accident. Production and any Netlify-hosted
+# branch/preview deploy still default to the real "carpools" store below.
+[context.dev.environment]
+  CARPOOL_STORE = "carpools-dev"
+
 # Narrow, single-path redirect (not a "/*" catch-all — that broke asset/function
 # routing under `netlify dev` earlier) so a direct visit to /admin still loads
 # the SPA instead of hitting Netlify's static-file 404.

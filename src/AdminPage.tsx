@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { computeKidDefaults, resolveKidDrivers } from "./carpoolSummary";
 import { AdminDatavizPanel, DATAVIZ_TABS, type DatavizTab } from "./AdminDataviz";
+import {
+  pickRepresentativeOccurrence,
+  toCarpoolView,
+  type CarpoolOccurrence,
+  type CarpoolSeries,
+} from "./types";
 
 const KEY_STORAGE = "blisspool:admin-key";
 
@@ -35,6 +41,23 @@ type AdminCarpool = {
 };
 
 type AdminUpdate = { id: string; text: string; createdAt: number };
+
+// The admin GET now returns CarpoolSeries + CarpoolOccurrence separately —
+// converted back into the flat AdminCarpool shape (the series' nearest
+// upcoming occurrence's dropOff/pickUp) at this one fetch boundary, so every
+// existing admin edit/view below keeps working unchanged against "the
+// current schedule," same as it did when that shape came straight off the
+// wire. Every admin mutation below (updateCarpool, setMemberSeats, moveKid,
+// etc.) still sends the exact same request shape it always did — only this
+// GET's response shape changed.
+function toAdminCarpools(series: CarpoolSeries[], occurrences: CarpoolOccurrence[]): AdminCarpool[] {
+  const byCode = new Map<string, CarpoolOccurrence[]>();
+  for (const o of occurrences) {
+    if (!byCode.has(o.code)) byCode.set(o.code, []);
+    byCode.get(o.code)!.push(o);
+  }
+  return series.map((s) => toCarpoolView(s, pickRepresentativeOccurrence(byCode.get(s.code) ?? [])));
+}
 
 // Mirrors CarpoolDetail's LegToggleRow: seats double as the driving toggle
 // (0 = not driving this leg, 1+ = driving with that many free seats), so
@@ -641,7 +664,7 @@ export function AdminPage() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setUsers(data.users);
-      setCarpools(data.carpools);
+      setCarpools(toAdminCarpools(data.carpools, data.occurrences ?? []));
       const updatesRes = await fetch("/api/updates");
       if (updatesRes.ok) setUpdates((await updatesRes.json()).updates);
       localStorage.setItem(KEY_STORAGE, candidateKey);
