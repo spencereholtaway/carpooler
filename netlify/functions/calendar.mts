@@ -373,6 +373,8 @@ function buildEventsForOccurrence(
   const location = [series.destination?.street, series.destination?.zip].filter(Boolean).join(", ");
   const url = `${origin}/?carpool=${series.code}`;
 
+  const skippedKids = new Set(occurrence.skippedKids ?? []);
+
   const events: string[] = [];
   for (const [legName, leg] of [
     ["dropOff", occurrence.dropOff],
@@ -381,6 +383,7 @@ function buildEventsForOccurrence(
     if (!leg?.time) continue;
 
     const kidToDriver = resolveKidDrivers(leg.cars ?? [], series.members, kidDefaults);
+    for (const kid of skippedKids) kidToDriver.delete(kid);
     const byDriver = groupKidsByDriver(kidToDriver);
 
     for (const [driverId, kids] of byDriver) {
