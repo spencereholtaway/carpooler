@@ -2864,6 +2864,10 @@ button {
   max-width: 320px;
 }
 
+.admin-filter-select {
+  flex: none;
+}
+
 .admin-member-chip {
   display: inline-flex;
   align-items: center;
