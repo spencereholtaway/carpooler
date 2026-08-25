@@ -1979,11 +1979,25 @@ button {
   font-size: 13px;
 }
 
+/* The two subline rows (time, address) sit right under one another and
+   don't need the same breathing room the flex gap gives every other
+   sidebar block. */
+.carpool-subline + .carpool-subline {
+  margin-top: -22px;
+}
+
 .bliss-heading.can-drive-heading {
   margin-top: 20px;
   margin-bottom: 0;
   text-align: left;
   font-style: normal;
+  font-size: 20px;
+}
+
+@media (min-width: 900px) {
+  .bliss-heading.can-drive-heading {
+    font-size: 17px;
+  }
 }
 
 .schedule-legs {
@@ -2247,7 +2261,7 @@ button {
   font-family: var(--serif);
   font-style: italic;
   font-weight: 500;
-  font-size: 21px;
+  font-size: 24px;
   line-height: 1.4;
   color: var(--text-h);
   /* The drop-off and pick-up sentences are joined with "\n" so they always
