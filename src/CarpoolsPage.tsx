@@ -471,7 +471,7 @@ export function CarpoolsPage({
                         <span className="carpool-row-time">{rowTimeRange(row.occurrence)}</span>
                       </div>
                       <p className="muted">
-                        {kids.map(shortenName).join(" & ")} not doing it this week — tap to add back.
+                        {kids.map(shortenName).join(" & ")} {kids.length > 1 ? "aren't" : "isn't"} going this week.
                       </p>
                     </button>
                   );
