@@ -1252,7 +1252,7 @@ export function CarpoolDetail({
         )}
 
         <div className="schedule-summary">
-          <h3 className="bliss-heading can-drive-heading">Can you drive?</h3>
+          <h3 className="bliss-heading can-drive-heading">Can you drive more kids?</h3>
           <div className="schedule-legs">
             <div className="leg-toggle-stack">
               <LegToggleRow
