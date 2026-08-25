@@ -218,6 +218,11 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(139, 123, 184, 0.15);
 }
 
+.date-picker-select {
+  padding: 12px 36px 12px 14px;
+  border-radius: 14px;
+}
+
 .field-row {
   display: flex;
   gap: 10px;
@@ -791,6 +796,50 @@ button {
   color: var(--text-h);
 }
 
+.removed-kids-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1.5px dashed var(--border);
+  background: transparent;
+  text-align: center;
+}
+
+.removed-kids-notice-text {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--text-h);
+  opacity: 0.75;
+}
+
+.removed-kids-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Same two-copies-toggled-by-breakpoint trick as .ai-summary above — one
+   copy sits under the title for mobile's single-column layout, one in the
+   main panel for desktop's two-column layout. */
+.removed-kids-notice-desktop-only {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .removed-kids-notice-mobile-only {
+    display: none;
+  }
+
+  .removed-kids-notice-desktop-only {
+    display: flex;
+  }
+}
+
 .app-shell-main {
   position: relative;
   max-width: 640px;
@@ -906,6 +955,24 @@ button {
 .carpool-row:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 34px rgba(139, 123, 184, 0.16);
+}
+
+/* "Not doing it this week" — present but not present: a faint dotted outline
+   with no fill, so it reads as a placeholder/reminder rather than a real
+   upcoming carpool competing with the solid cards around it. */
+.carpool-row-ghost {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1.5px dotted var(--border);
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.carpool-row-ghost:hover {
+  transform: none;
+  box-shadow: none;
+  opacity: 0.8;
 }
 
 .carpool-row-top {
@@ -1059,6 +1126,15 @@ button {
 .carpool-day-label {
   padding-left: 4px;
   font-size: 20px;
+}
+
+/* Marks a Sunday→Monday crossing in the date list, so "next 2 weeks of
+   events" still reads as two distinct weeks rather than one long run. */
+.week-divider {
+  width: 100%;
+  border: none;
+  border-top: 1.5px dotted var(--border);
+  margin: 4px 0;
 }
 
 .section-actions {
@@ -1429,6 +1505,18 @@ button {
     padding-right: 24px;
     margin-left: -24px;
     margin-right: -24px;
+  }
+
+  /* Low-content state: the "removed this week" notice is the only thing in
+     the main column, so it reads better centered in the available space
+     than pinned to the top-left like a full driving-legs section would be. */
+  .carpool-detail-main:has(> .removed-kids-notice-desktop-only:only-child) {
+    align-items: center;
+    justify-content: safe center;
+  }
+
+  .removed-kids-notice-desktop-only {
+    max-width: 420px;
   }
 
   .carpool-detail-sidebar {

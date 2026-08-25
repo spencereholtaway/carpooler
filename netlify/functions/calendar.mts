@@ -4,7 +4,6 @@ import { getStore } from "@netlify/blobs";
 type Member = {
   id: string;
   name: string;
-  seats: number;
   kids: string[];
   canDriveDropOff: boolean;
   canDrivePickUp: boolean;
@@ -12,10 +11,49 @@ type Member = {
   zip: string;
   coparentId?: string | null;
 };
-type Car = { driverId: string; kids: string[] };
+type Car = { driverId: string; kids: string[]; seats: number };
 type Leg = { time: string; cars: Car[] };
 type Address = { street: string; zip: string };
-type Carpool = {
+
+const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+type DayOfWeek = (typeof DAYS_OF_WEEK)[number];
+const DAY_INDEX: Record<DayOfWeek, number> = Object.fromEntries(DAYS_OF_WEEK.map((d, i) => [d, i])) as Record<
+  DayOfWeek,
+  number
+>;
+
+type RecurrenceType = "weekly" | "biweekly" | "oneoff";
+type RecurrenceEra = {
+  startDate: string;
+  endDate: string | null;
+  type: RecurrenceType;
+  daysOfWeek: DayOfWeek[];
+  defaultDropOff: Leg;
+  defaultPickUp: Leg;
+};
+type CarpoolSeries = {
+  code: string;
+  name: string;
+  destination: Address;
+  recurrenceEras: RecurrenceEra[];
+  members: Member[];
+  createdAt: number;
+  timezone: string;
+};
+type CarpoolOccurrence = {
+  code: string;
+  date: string;
+  dropOff: Leg;
+  pickUp: Leg;
+  overridden: { dropOff: boolean; pickUp: boolean };
+  historized: boolean;
+  // Kids not participating in this specific occurrence (e.g. a trip that
+  // day) — removed from every car on both legs; excluded from the
+  // unclaimed-kid-defaults-to-own-parent fallback everywhere it's computed.
+  skippedKids?: string[];
+  generatedAt: number;
+};
+type LegacyCarpool = {
   code: string;
   name: string;
   day: string;
@@ -24,21 +62,120 @@ type Carpool = {
   pickUp: Leg;
   members: Member[];
   createdAt: number;
-  timezone?: string;
+  timezone: string;
 };
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
+const GENERATION_HORIZON_DAYS = 56;
 
-// Monday = 0 .. Sunday = 6, matching src/types.ts's DAYS_OF_WEEK order.
-const DAY_TO_MON0: Record<string, number> = {
-  Monday: 0,
-  Tuesday: 1,
-  Wednesday: 2,
-  Thursday: 3,
-  Friday: 4,
-  Saturday: 5,
-  Sunday: 6,
-};
+// ---- date helpers + migration/generation (see carpools.mts for the fuller
+// comments — duplicated here per this repo's no-shared-modules convention) ----
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function isoCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function weekdayIndexISO(iso: string): number {
+  return (new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7;
+}
+function mondayOfISO(iso: string): string {
+  return addDaysISO(iso, -weekdayIndexISO(iso));
+}
+function weeksBetweenMondays(a: string, b: string): number {
+  return Math.round((new Date(a + "T00:00:00Z").getTime() - new Date(b + "T00:00:00Z").getTime()) / (7 * 86400000));
+}
+function nextDateForWeekday(day: DayOfWeek): string {
+  const today = todayISO();
+  const diff = (DAY_INDEX[day] - weekdayIndexISO(today) + 7) % 7;
+  return addDaysISO(today, diff);
+}
+function generateDatesForEra(era: RecurrenceEra, horizonEndISO: string): string[] {
+  if (era.type === "oneoff") return [era.startDate];
+  const today = todayISO();
+  const scanStart = isoCompare(era.startDate, today) > 0 ? era.startDate : today;
+  const scanEnd = era.endDate && isoCompare(era.endDate, horizonEndISO) < 0 ? era.endDate : horizonEndISO;
+  if (isoCompare(scanStart, scanEnd) > 0) return [];
+  const eraMonday = mondayOfISO(era.startDate);
+  const wantedDays = new Set(era.daysOfWeek.map((d) => DAY_INDEX[d]));
+  const dates: string[] = [];
+  for (let d = scanStart; isoCompare(d, scanEnd) <= 0; d = addDaysISO(d, 1)) {
+    if (!wantedDays.has(weekdayIndexISO(d))) continue;
+    if (era.type === "biweekly" && weeksBetweenMondays(mondayOfISO(d), eraMonday) % 2 !== 0) continue;
+    dates.push(d);
+  }
+  return dates;
+}
+function isLegacyShape(blob: unknown): blob is LegacyCarpool {
+  return !!blob && typeof blob === "object" && "day" in (blob as object) && !("recurrenceEras" in (blob as object));
+}
+function migrateLegacyCarpool(legacy: LegacyCarpool): CarpoolSeries {
+  const day = (DAYS_OF_WEEK as readonly string[]).includes(legacy.day) ? (legacy.day as DayOfWeek) : "Monday";
+  return {
+    code: legacy.code,
+    name: legacy.name,
+    destination: legacy.destination,
+    recurrenceEras: [
+      {
+        startDate: nextDateForWeekday(day),
+        endDate: null,
+        type: "weekly",
+        daysOfWeek: [day],
+        defaultDropOff: legacy.dropOff,
+        defaultPickUp: legacy.pickUp,
+      },
+    ],
+    members: legacy.members,
+    createdAt: legacy.createdAt,
+    timezone: legacy.timezone || DEFAULT_TIMEZONE,
+  };
+}
+async function generateOccurrences(store: ReturnType<typeof getStore>, series: CarpoolSeries): Promise<void> {
+  const horizonEnd = addDaysISO(todayISO(), GENERATION_HORIZON_DAYS);
+  for (const era of series.recurrenceEras) {
+    const dates = generateDatesForEra(era, horizonEnd);
+    await Promise.all(
+      dates.map(async (date) => {
+        const occKey = `occ:${series.code}:${date}`;
+        if (await store.get(occKey, { type: "json" })) return;
+        const occurrence: CarpoolOccurrence = {
+          code: series.code,
+          date,
+          dropOff: { time: era.defaultDropOff.time, cars: era.defaultDropOff.cars.map((c) => ({ ...c, kids: [...c.kids] })) },
+          pickUp: { time: era.defaultPickUp.time, cars: era.defaultPickUp.cars.map((c) => ({ ...c, kids: [...c.kids] })) },
+          overridden: { dropOff: false, pickUp: false },
+          historized: false,
+          skippedKids: [],
+          generatedAt: Date.now(),
+        };
+        await store.setJSON(occKey, occurrence);
+      })
+    );
+  }
+}
+async function listOccurrences(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolOccurrence[]> {
+  const { blobs } = await store.list({ prefix: `occ:${code}:` });
+  const occs = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
+  return occs.filter(Boolean) as CarpoolOccurrence[];
+}
+async function loadSeries(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolSeries | null> {
+  const raw = await store.get(`code:${code}`, { type: "json" });
+  if (!raw) return null;
+  let series: CarpoolSeries;
+  if (isLegacyShape(raw)) {
+    series = migrateLegacyCarpool(raw);
+    await store.setJSON(`code:${code}`, series);
+  } else {
+    series = raw as CarpoolSeries;
+  }
+  await generateOccurrences(store, series);
+  return series;
+}
 
 function joinList(items: string[]): string {
   if (items.length === 0) return "";
@@ -129,16 +266,6 @@ function foldLine(line: string): string {
 // render an absolute instant identically.
 type ZonedParts = { year: number; month: number; day: number; hour: number; minute: number; weekday: string };
 
-const WEEKDAY_SHORT_TO_MON0: Record<string, number> = {
-  Mon: 0,
-  Tue: 1,
-  Wed: 2,
-  Thu: 3,
-  Fri: 4,
-  Sat: 5,
-  Sun: 6,
-};
-
 function zonedParts(date: Date, timeZone: string): ZonedParts {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -183,23 +310,25 @@ function icsUtc(date: Date): string {
   return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
-// Next date (today included) that falls on the given Monday=0..Sunday=6
-// weekday, as observed in `timeZone` (not the server's own zone).
-function nextDateForWeekday(weekdayMon0: number, timeZone: string): { year: number; month: number; day: number } {
-  const now = zonedParts(new Date(), timeZone);
-  const todayMon0 = WEEKDAY_SHORT_TO_MON0[now.weekday];
-  const diff = (weekdayMon0 - todayMon0 + 7) % 7;
-  // Anchor at UTC noon so adding days never crosses a local-date boundary.
-  const anchor = new Date(Date.UTC(now.year, now.month - 1, now.day + diff, 12));
-  return { year: anchor.getUTCFullYear(), month: anchor.getUTCMonth() + 1, day: anchor.getUTCDate() };
-}
-
 function utcStamp(): string {
   return icsUtc(new Date());
 }
 
-const UTC_DAY_TO_ICAL = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+function parseISODate(iso: string): { year: number; month: number; day: number } {
+  const [year, month, day] = iso.split("-").map(Number);
+  return { year, month, day };
+}
 
+// One standalone VEVENT per occurrence — no RRULE at all. Every date this
+// carpool actually runs on is already materialized as its own
+// CarpoolOccurrence (including any per-date override), so there's no
+// recurrence rule to reconstruct and no BYDAY/UTC-weekday phase-matching to
+// get subtly wrong (a real bug this file used to have, per the comment that
+// used to live on this function). The only tradeoff is the feed only shows
+// occurrences within the app's generation horizon (currently 8 weeks) until
+// someone next opens the app to top up further ones — an acceptable trade
+// given the hourly refresh interval below and that generation already
+// happens opportunistically on every read.
 function buildEvent(opts: {
   uid: string;
   summary: string;
@@ -213,15 +342,6 @@ function buildEvent(opts: {
   const start = zonedTimeToUtc(opts.date.year, opts.date.month, opts.date.day, h, m, opts.timezone);
   const dtstart = icsUtc(start);
   const dtend = icsUtc(new Date(start.getTime() + 15 * 60000));
-  // DTSTART is a bare UTC instant (no TZID), so per RFC 5545 the RRULE is
-  // evaluated in UTC too — BYDAY must match DTSTART's *UTC* weekday, not the
-  // carpool's local one. An evening Pacific time converts to the next UTC
-  // calendar day, so using the local day here (e.g. "TU" for a Tuesday
-  // practice) silently mismatches DTSTART's real UTC weekday (Wednesday);
-  // calendar apps then generate every recurrence *after* the first from the
-  // BYDAY rule, landing one day earlier in local time (Monday instead of
-  // Tuesday) even though the very first occurrence looked correct.
-  const byday = UTC_DAY_TO_ICAL[start.getUTCDay()];
 
   const lines = [
     "BEGIN:VEVENT",
@@ -229,7 +349,6 @@ function buildEvent(opts: {
     `DTSTAMP:${utcStamp()}`,
     `DTSTART:${dtstart}`,
     `DTEND:${dtend}`,
-    `RRULE:FREQ=WEEKLY;BYDAY=${byday}`,
     `SUMMARY:${escapeText(opts.summary)}`,
     ...(opts.location ? [`LOCATION:${escapeText(opts.location)}`] : []),
     `DESCRIPTION:${escapeText(`Open in blisspool: ${opts.url}`)}`,
@@ -239,25 +358,29 @@ function buildEvent(opts: {
   return lines.map(foldLine).join("\r\n");
 }
 
-function buildEventsForCarpool(carpool: Carpool, memberId: string, origin: string): string[] {
-  if (!(carpool.day in DAY_TO_MON0)) return [];
-  const self = carpool.members.find((m) => m.id === memberId);
+function buildEventsForOccurrence(
+  series: CarpoolSeries,
+  occurrence: CarpoolOccurrence,
+  memberId: string,
+  origin: string
+): string[] {
+  const self = series.members.find((m) => m.id === memberId);
   if (!self) return [];
 
-  const timezone = carpool.timezone || DEFAULT_TIMEZONE;
-  const kidDefaults = computeKidDefaults(carpool.members);
-  const date = nextDateForWeekday(DAY_TO_MON0[carpool.day], timezone);
-  const location = [carpool.destination?.street, carpool.destination?.zip].filter(Boolean).join(", ");
-  const url = `${origin}/?carpool=${carpool.code}`;
+  const timezone = series.timezone || DEFAULT_TIMEZONE;
+  const kidDefaults = computeKidDefaults(series.members);
+  const date = parseISODate(occurrence.date);
+  const location = [series.destination?.street, series.destination?.zip].filter(Boolean).join(", ");
+  const url = `${origin}/?carpool=${series.code}`;
 
   const events: string[] = [];
   for (const [legName, leg] of [
-    ["dropOff", carpool.dropOff],
-    ["pickUp", carpool.pickUp],
+    ["dropOff", occurrence.dropOff],
+    ["pickUp", occurrence.pickUp],
   ] as const) {
     if (!leg?.time) continue;
 
-    const kidToDriver = resolveKidDrivers(leg.cars ?? [], carpool.members, kidDefaults);
+    const kidToDriver = resolveKidDrivers(leg.cars ?? [], series.members, kidDefaults);
     const byDriver = groupKidsByDriver(kidToDriver);
 
     for (const [driverId, kids] of byDriver) {
@@ -265,21 +388,21 @@ function buildEventsForCarpool(carpool: Carpool, memberId: string, origin: strin
       if (driverId === memberId) {
         summary =
           legName === "dropOff"
-            ? `Drive ${joinList(kids)} to ${carpool.name}`
-            : `Pick up ${joinList(kids)} from ${carpool.name}`;
+            ? `Drive ${joinList(kids)} to ${series.name}`
+            : `Pick up ${joinList(kids)} from ${series.name}`;
       } else {
         const relevantKids = kids.filter((k) => self.kids.includes(k));
         if (relevantKids.length === 0) continue;
-        const driverName = carpool.members.find((m) => m.id === driverId)?.name ?? "Someone";
+        const driverName = series.members.find((m) => m.id === driverId)?.name ?? "Someone";
         summary =
           legName === "dropOff"
-            ? `${driverName} is driving ${joinList(relevantKids)} to ${carpool.name}`
-            : `${driverName} is picking up ${joinList(relevantKids)} from ${carpool.name}`;
+            ? `${driverName} is driving ${joinList(relevantKids)} to ${series.name}`
+            : `${driverName} is picking up ${joinList(relevantKids)} from ${series.name}`;
       }
 
       events.push(
         buildEvent({
-          uid: `${carpool.code}-${legName}-${driverId}@blisspool`,
+          uid: `${series.code}-${occurrence.date}-${legName}-${driverId}@blisspool`,
           summary,
           date,
           time: leg.time,
@@ -297,14 +420,21 @@ export default async (req: Request) => {
   const memberId = new URL(req.url).searchParams.get("memberId");
   if (!memberId) return new Response("Missing memberId", { status: 400 });
 
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
   const codes = ((await store.get(`member:${memberId}`, { type: "json" })) as string[] | null) ?? [];
-  const carpools = (
-    await Promise.all(codes.map((code) => store.get(`code:${code}`, { type: "json" })))
-  ).filter(Boolean) as Carpool[];
+  const seriesList = (await Promise.all(codes.map((code) => loadSeries(store, code)))).filter(
+    Boolean
+  ) as CarpoolSeries[];
 
   const origin = new URL(req.url).origin;
-  const events = carpools.flatMap((c) => buildEventsForCarpool(c, memberId, origin));
+  const events = (
+    await Promise.all(
+      seriesList.map(async (series) => {
+        const occurrences = await listOccurrences(store, series.code);
+        return occurrences.flatMap((occ) => buildEventsForOccurrence(series, occ, memberId, origin));
+      })
+    )
+  ).flat();
 
   const calendar = [
     "BEGIN:VCALENDAR",

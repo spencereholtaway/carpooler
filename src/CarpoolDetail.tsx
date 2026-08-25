@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { getHousehold, joinCarpool, updateCarpoolSchedule } from "./api";
+import {
+  getHousehold,
+  joinCarpool,
+  moveOccurrence,
+  skipKid,
+  updateCarpoolLabel,
+  updateCarpoolSchedule,
+  updateOccurrence,
+  updateTimeEverywhere,
+  type CarpoolResult,
+} from "./api";
 import { BottomSheet } from "./BottomSheet";
 import { BuyMeACoffeeLink } from "./BuyMeACoffeeLink";
 import { computeKidDefaults, formatTime, joinList, resolveKidDrivers, summarizeCarpool } from "./carpoolSummary";
@@ -9,13 +19,22 @@ import { mapsLink, multiStopMapsLink } from "./maps";
 import { useBackable } from "./useBackable";
 import {
   COMMON_TIMEZONES,
+  currentEra,
   DAYS_OF_WEEK,
   detectTimezone,
+  friendlyDateLabel,
+  nearestDateForWeekday,
+  pickRepresentativeOccurrence,
+  toCarpoolView,
+  todayISO,
   type Address,
   type Car,
-  type Carpool,
+  type CarpoolOccurrence,
+  type Leg,
+  type CarpoolSeries,
   type DayOfWeek,
   type Member,
+  type RecurrenceType,
   shortenName,
 } from "./types";
 import { useTypewriter } from "./useTypewriter";
@@ -226,6 +245,43 @@ function LegToggleRow({
           </button>
         </span>
       </span>
+    </div>
+  );
+}
+
+// Stands in for "who's driving who" once every one of this member's kids has
+// been marked not participating this week — there's no driving to show, just
+// a way back in per kid (which restores them to the driver's own car with
+// whatever seat count they'd had before, per skipKid's un-skip behavior).
+function RemovedKidsNotice({
+  kids,
+  onAddBack,
+  togglingKid,
+  className,
+}: {
+  kids: string[];
+  onAddBack: (kid: string) => void;
+  togglingKid: string | null;
+  className?: string;
+}) {
+  return (
+    <div className={`removed-kids-notice${className ? ` ${className}` : ""}`}>
+      <p className="removed-kids-notice-text">
+        You removed {joinList(kids.map(shortenName))} from this week.
+      </p>
+      <div className="removed-kids-notice-actions">
+        {kids.map((kid) => (
+          <button
+            key={kid}
+            type="button"
+            className="pill-button secondary"
+            disabled={togglingKid === kid}
+            onClick={() => onAddBack(kid)}
+          >
+            {togglingKid === kid ? "Adding back..." : `Add ${shortenName(kid)} back`}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -530,20 +586,38 @@ function DrivingLeg({
 }
 
 export function CarpoolDetail({
-  carpool,
+  series,
+  occurrences,
   memberId,
   allKids,
   onBack,
   onCarpoolUpdated,
+  onOccurrenceUpdated,
   onCarpoolLeft,
 }: {
-  carpool: Carpool;
+  series: CarpoolSeries;
+  occurrences: CarpoolOccurrence[];
   memberId: string;
   allKids: string[];
   onBack: () => void;
-  onCarpoolUpdated: (carpool: Carpool) => void;
+  onCarpoolUpdated: (result: CarpoolResult) => void;
+  onOccurrenceUpdated: (occurrence: CarpoolOccurrence) => void;
   onCarpoolLeft: (code: string) => void;
 }) {
+  // Which upcoming date this screen is showing/editing — defaults to the
+  // nearest one, same carpool the old single-schedule app always showed.
+  // Every driver/seat/kid control below operates on this occurrence via
+  // `carpool` (a flat view derived from series+occurrence), completely
+  // unchanged from when that shape came straight from the server.
+  const upcomingOccurrences = [...occurrences]
+    .filter((o) => o.date >= todayISO() && !o.cancelled)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const defaultDate = pickRepresentativeOccurrence(occurrences)?.date;
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const occurrence = occurrences.find((o) => o.date === selectedDate) ?? occurrences.find((o) => o.date === defaultDate);
+  const isEditingDefaultOccurrence = !occurrence || occurrence.date === defaultDate;
+  const carpool = toCarpoolView(series, occurrence);
+
   const [copied, setCopied] = useState(false);
   const [editingCarpool, setEditingCarpool] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -552,7 +626,19 @@ export function CarpoolDetail({
   const [movePrompt, setMovePrompt] = useState<{ leg: "dropOff" | "pickUp"; kids: string[] } | null>(
     null
   );
+  // Changing which day(s) it runs on or its time is genuinely ambiguous —
+  // sometimes it's a one-off ("kickoff moved to 8am this week", "just this
+  // Wednesday moved to Thursday") and sometimes it's a real change that
+  // should stick. Rather than a generic "Save" that then asks, the three
+  // scope options are the save buttons themselves, always visible whenever
+  // there's a schedule change to apply — "All"/"From this date forward" ask
+  // for confirmation first (real, harder-to-undo changes); "Just this one"
+  // doesn't (low-impact, easy to revisit).
+  const [applyingScope, setApplyingScope] = useState<"all" | "future" | "occurrence" | null>(null);
+  const [confirmingScope, setConfirmingScope] = useState<"all" | "future" | null>(null);
+  const closeConfirmingScope = useBackable(!!confirmingScope, () => setConfirmingScope(null));
   const [applyingMovePrompt, setApplyingMovePrompt] = useState(false);
+  const [togglingSkipKid, setTogglingSkipKid] = useState<string | null>(null);
   // Turning off a leg's driving toggle evicts anyone else's kid riding in
   // that car (see syncCar server-side) — gate that behind an explicit
   // confirmation instead of letting a toggle click silently bounce someone
@@ -574,16 +660,25 @@ export function CarpoolDetail({
   const closePendingLeave = useBackable(pendingLeave, () => setPendingLeave(false));
 
   const self = carpool.members.find((m) => m.id === memberId);
+  // Unlike `self` (whose kids are filtered down for whichever occurrence is
+  // being viewed — see toCarpoolView), this is real carpool membership: a
+  // kid skipped just for this date must never look "removed from the
+  // carpool" to the membership editor below.
+  const realSelf = series.members.find((m) => m.id === memberId);
   // With nobody else to coordinate with yet, "who's driving who" has only
   // one answer — swap that whole section out for a prominent invite instead.
   const soloMember = carpool.members.length === 1;
-  const [draftKids, setDraftKids] = useState<string[]>(self?.kids ?? []);
+  const [draftKids, setDraftKids] = useState<string[]>(realSelf?.kids ?? []);
   const [draftName, setDraftName] = useState(carpool.name);
-  const [draftDay, setDraftDay] = useState<DayOfWeek>(carpool.day);
-  const [draftStreet, setDraftStreet] = useState(carpool.destination?.street ?? "");
-  const [draftZip, setDraftZip] = useState(carpool.destination?.zip ?? "");
+  const [draftRecurrenceType, setDraftRecurrenceType] = useState<RecurrenceType>(currentEra(series).type);
+  const [draftDaysOfWeek, setDraftDaysOfWeek] = useState<DayOfWeek[]>(currentEra(series).daysOfWeek);
+  // Only meaningful for "oneoff" — there's exactly one occurrence, so
+  // changing its date just moves it directly, no era/scope question needed.
+  const [draftStartDate, setDraftStartDate] = useState(todayISO());
   const [draftDropOffTime, setDraftDropOffTime] = useState(carpool.dropOff?.time ?? "");
   const [draftPickUpTime, setDraftPickUpTime] = useState(carpool.pickUp?.time ?? "");
+  const [draftStreet, setDraftStreet] = useState(carpool.destination?.street ?? "");
+  const [draftZip, setDraftZip] = useState(carpool.destination?.zip ?? "");
   const [draftTimezone, setDraftTimezone] = useState(carpool.timezone || detectTimezone());
   const draftTimezoneOptions = COMMON_TIMEZONES.some((tz) => tz.value === draftTimezone)
     ? COMMON_TIMEZONES
@@ -602,6 +697,12 @@ export function CarpoolDetail({
     window.scrollTo(0, 0);
   }, [carpool.code]);
 
+  // True once every one of this member's real kids has been marked "not
+  // doing it this week" for the occurrence being viewed — at that point
+  // there's nothing left for "who's driving who" to say about you, so that
+  // whole section swaps out for a removed-kids message instead.
+  const allMyKidsSkipped =
+    !!realSelf && realSelf.kids.length > 0 && realSelf.kids.every((k) => (occurrence?.skippedKids ?? []).includes(k));
   const kidDefaults = computeKidDefaults(carpool.members);
   const youSummary = summarizeCarpool(carpool, memberId);
   const { display: typedSummary, done: typingDone } = useTypewriter(youSummary);
@@ -661,13 +762,16 @@ export function CarpoolDetail({
   );
 
   const openCarpoolEditor = () => {
-    setDraftKids(self?.kids ?? []);
+    setDraftKids(realSelf?.kids ?? []);
     setDraftName(carpool.name);
-    setDraftDay(carpool.day);
+    const era = currentEra(series);
+    setDraftRecurrenceType(era.type);
+    setDraftDaysOfWeek(era.daysOfWeek);
+    setDraftStartDate(era.startDate);
+    setDraftDropOffTime(era.defaultDropOff.time);
+    setDraftPickUpTime(era.defaultPickUp.time);
     setDraftStreet(carpool.destination?.street ?? "");
     setDraftZip(carpool.destination?.zip ?? "");
-    setDraftDropOffTime(carpool.dropOff?.time ?? "");
-    setDraftPickUpTime(carpool.pickUp?.time ?? "");
     setDraftTimezone(carpool.timezone || detectTimezone());
     setEditingCarpool(true);
   };
@@ -679,52 +783,187 @@ export function CarpoolDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const saveCarpool = async () => {
-    if (!self) return;
+  // What actually changed since the sheet opened, relative to the series'
+  // current era — used both to decide whether the scope prompt needs to
+  // show at all, and (once a scope is chosen) how to apply it.
+  const scheduleDiff = () => {
+    const era = currentEra(series);
+    const typeChanged = draftRecurrenceType !== era.type;
+    const daysChanged =
+      draftRecurrenceType !== "oneoff" &&
+      JSON.stringify([...draftDaysOfWeek].sort()) !== JSON.stringify([...era.daysOfWeek].sort());
+    const dateChanged = draftRecurrenceType === "oneoff" && draftStartDate !== era.startDate;
+    const timeChanged = draftDropOffTime !== era.defaultDropOff.time || draftPickUpTime !== era.defaultPickUp.time;
+    return {
+      era,
+      typeChanged,
+      daysChanged,
+      dateChanged,
+      timeChanged,
+      structureChanged: typeChanged || daysChanged || dateChanged,
+    };
+  };
+
+  // "Just this one" only makes sense when there's an unambiguous single
+  // target: either nothing about the recurrence structure changed (a pure
+  // time correction), or exactly one day is selected so a move has one
+  // obvious destination date.
+  const justThisOneAvailable = (() => {
+    const { typeChanged, daysChanged } = scheduleDiff();
+    return !typeChanged && (!daysChanged || draftDaysOfWeek.length === 1);
+  })();
+
+  // Applies whichever day(s)/time changes were made under the given scope,
+  // then saves the always-unambiguous label + kids fields. Also the path
+  // taken when nothing ambiguous changed at all (scope "future" is simply a
+  // no-op for the schedule half in that case).
+  const commitSave = async (scope: "future" | "all" | "occurrence") => {
+    if (!self || !realSelf) return;
     setSaving(true);
+    setApplyingScope(scope);
     try {
-      const updated = await updateCarpoolSchedule(
-        carpool.code,
-        draftDay,
-        { street: draftStreet.trim(), zip: draftZip.trim() },
-        { time: draftDropOffTime, cars: carpool.dropOff?.cars ?? [] },
-        { time: draftPickUpTime, cars: carpool.pickUp?.cars ?? [] },
-        draftName.trim() || undefined,
-        draftTimezone
-      );
-      const withKids = await joinCarpool(updated.code, { ...self, kids: draftKids });
+      const { era, structureChanged, timeChanged } = scheduleDiff();
+
+      if (scope === "occurrence" && occurrence) {
+        const movingDay =
+          draftRecurrenceType !== "oneoff" &&
+          draftDaysOfWeek.length === 1 &&
+          JSON.stringify([...draftDaysOfWeek].sort()) !== JSON.stringify([...era.daysOfWeek].sort());
+        if (movingDay) {
+          const toDate = nearestDateForWeekday(occurrence.date, draftDaysOfWeek[0]);
+          const fields: { dropOff?: Leg; pickUp?: Leg } = {};
+          if (timeChanged) {
+            fields.dropOff = { time: draftDropOffTime, cars: occurrence.dropOff.cars };
+            fields.pickUp = { time: draftPickUpTime, cars: occurrence.pickUp.cars };
+          }
+          const result = await moveOccurrence(carpool.code, occurrence.date, toDate, fields);
+          onCarpoolUpdated(result);
+          setSelectedDate(toDate);
+        } else if (timeChanged) {
+          const fields: { dropOff?: Leg; pickUp?: Leg } = {};
+          if (draftDropOffTime !== occurrence.dropOff.time) {
+            fields.dropOff = { time: draftDropOffTime, cars: occurrence.dropOff.cars };
+          }
+          if (draftPickUpTime !== occurrence.pickUp.time) {
+            fields.pickUp = { time: draftPickUpTime, cars: occurrence.pickUp.cars };
+          }
+          if (fields.dropOff || fields.pickUp) {
+            const updatedOcc = await updateOccurrence(carpool.code, occurrence.date, fields);
+            onOccurrenceUpdated(updatedOcc);
+          }
+        }
+      } else if (scope === "all") {
+        if (draftDropOffTime !== era.defaultDropOff.time) {
+          await updateTimeEverywhere(carpool.code, "dropOff", draftDropOffTime);
+        }
+        if (draftPickUpTime !== era.defaultPickUp.time) {
+          await updateTimeEverywhere(carpool.code, "pickUp", draftPickUpTime);
+        }
+        if (structureChanged) {
+          // A day-of-week/frequency change can never be retroactive — it
+          // always takes effect starting today, same as "future" below.
+          const startDate = draftRecurrenceType === "oneoff" ? draftStartDate : todayISO();
+          const result = await updateCarpoolSchedule(
+            carpool.code,
+            { type: draftRecurrenceType, daysOfWeek: draftRecurrenceType === "oneoff" ? undefined : draftDaysOfWeek, startDate },
+            { time: draftDropOffTime, cars: era.defaultDropOff.cars },
+            { time: draftPickUpTime, cars: era.defaultPickUp.cars }
+          );
+          onCarpoolUpdated(result);
+        }
+      } else if (structureChanged || timeChanged) {
+        const startDate =
+          draftRecurrenceType === "oneoff" ? draftStartDate : occurrence ? occurrence.date : todayISO();
+        const result = await updateCarpoolSchedule(
+          carpool.code,
+          { type: draftRecurrenceType, daysOfWeek: draftRecurrenceType === "oneoff" ? undefined : draftDaysOfWeek, startDate },
+          { time: draftDropOffTime, cars: era.defaultDropOff.cars },
+          { time: draftPickUpTime, cars: era.defaultPickUp.cars }
+        );
+        onCarpoolUpdated(result);
+      }
+
+      await updateCarpoolLabel(carpool.code, {
+        name: draftName.trim() || undefined,
+        destination: { street: draftStreet.trim(), zip: draftZip.trim() },
+        timezone: draftTimezone,
+      });
+      const withKids = await joinCarpool(carpool.code, { ...realSelf, kids: draftKids });
       onCarpoolUpdated(withKids);
       closeCarpoolEditor();
     } finally {
       setSaving(false);
+      setApplyingScope(null);
     }
+  };
+
+  // Whether the day(s)/how-often/time actually changed enough to need a
+  // scope choice at all — a one-off never does (there's only one
+  // occurrence, nothing to disambiguate).
+  const scheduleAmbiguous = () => {
+    const { era, structureChanged, timeChanged } = scheduleDiff();
+    if (!structureChanged && !timeChanged) return false;
+    if (era.type === "oneoff" && draftRecurrenceType === "oneoff") return false;
+    return true;
   };
 
   // Saving with no kids left selected doesn't mean "nothing arranged" — it
   // means you're not in this carpool anymore. Confirm that before it happens
-  // instead of saving straight through.
-  const requestSaveCarpool = () => {
+  // instead of saving straight through, regardless of which button triggered it.
+  const handleScopeClick = (scope: "future" | "all" | "occurrence") => {
     if (draftKids.length === 0) {
       setPendingLeave(true);
       return;
     }
-    saveCarpool();
+    // "All" and "this and all future" are the two harder-to-undo choices —
+    // confirm before applying. "Just this one" doesn't need it: low-impact,
+    // easy to revisit from the date switcher.
+    if (scope === "all" || scope === "future") {
+      setConfirmingScope(scope);
+      return;
+    }
+    commitSave(scope);
+  };
+
+  const confirmScopeAndSave = () => {
+    if (!confirmingScope) return;
+    const scope = confirmingScope;
+    setConfirmingScope(null);
+    commitSave(scope);
+  };
+
+  // Nothing schedule-related changed — a plain save, no scope question.
+  const handlePlainSave = () => {
+    if (draftKids.length === 0) {
+      setPendingLeave(true);
+      return;
+    }
+    commitSave("future");
   };
 
   const confirmLeave = async () => {
     if (!self) return;
     setConfirmingLeave(true);
     try {
-      const updated = await updateCarpoolSchedule(
-        carpool.code,
-        draftDay,
-        { street: draftStreet.trim(), zip: draftZip.trim() },
-        { time: draftDropOffTime, cars: carpool.dropOff?.cars ?? [] },
-        { time: draftPickUpTime, cars: carpool.pickUp?.cars ?? [] },
-        draftName.trim() || undefined,
-        draftTimezone
-      );
-      await joinCarpool(updated.code, { ...self, kids: [] });
+      await updateCarpoolLabel(carpool.code, {
+        name: draftName.trim() || undefined,
+        destination: { street: draftStreet.trim(), zip: draftZip.trim() },
+        timezone: draftTimezone,
+      });
+      // Leaving doesn't ask about schedule scope — whatever day/time edits
+      // were made apply "from now on," same as the app always did before a
+      // leave flow existed at all.
+      const { era, structureChanged, timeChanged } = scheduleDiff();
+      if (structureChanged || timeChanged) {
+        const startDate = draftRecurrenceType === "oneoff" ? draftStartDate : todayISO();
+        await updateCarpoolSchedule(
+          carpool.code,
+          { type: draftRecurrenceType, daysOfWeek: draftRecurrenceType === "oneoff" ? undefined : draftDaysOfWeek, startDate },
+          { time: draftDropOffTime, cars: era.defaultDropOff.cars },
+          { time: draftPickUpTime, cars: era.defaultPickUp.cars }
+        );
+      }
+      await joinCarpool(carpool.code, { ...self, kids: [] });
       onCarpoolLeft(carpool.code);
       closePendingLeave();
       closeCarpoolEditor();
@@ -735,18 +974,19 @@ export function CarpoolDetail({
   };
 
   const toggleDropOff = async () => {
-    if (!self) return;
+    if (!self || !realSelf) return;
     setTogglingDropOff(true);
     try {
       const turningOn = !self.canDriveDropOff;
-      const updated = await joinCarpool(carpool.code, {
-        ...self,
+      const result = await joinCarpool(carpool.code, {
+        ...realSelf,
         canDriveDropOff: turningOn,
       });
-      onCarpoolUpdated(updated);
+      onCarpoolUpdated(result);
       if (turningOn) {
-        const updatedSelf = updated.members.find((m) => m.id === memberId);
-        const offer = kidsToOfferMove(updated.dropOff?.cars ?? [], memberId, updatedSelf?.kids ?? []);
+        const updatedSelf = result.carpool.members.find((m) => m.id === memberId);
+        const freshOcc = result.occurrences.find((o) => o.date === occurrence?.date);
+        const offer = kidsToOfferMove(freshOcc?.dropOff?.cars ?? [], memberId, updatedSelf?.kids ?? []);
         setMovePrompt(offer.length > 0 ? { leg: "dropOff", kids: offer } : null);
       } else {
         setMovePrompt((p) => (p?.leg === "dropOff" ? null : p));
@@ -757,18 +997,19 @@ export function CarpoolDetail({
   };
 
   const togglePickUp = async () => {
-    if (!self) return;
+    if (!self || !realSelf) return;
     setTogglingPickUp(true);
     try {
       const turningOn = !self.canDrivePickUp;
-      const updated = await joinCarpool(carpool.code, {
-        ...self,
+      const result = await joinCarpool(carpool.code, {
+        ...realSelf,
         canDrivePickUp: turningOn,
       });
-      onCarpoolUpdated(updated);
+      onCarpoolUpdated(result);
       if (turningOn) {
-        const updatedSelf = updated.members.find((m) => m.id === memberId);
-        const offer = kidsToOfferMove(updated.pickUp?.cars ?? [], memberId, updatedSelf?.kids ?? []);
+        const updatedSelf = result.carpool.members.find((m) => m.id === memberId);
+        const freshOcc = result.occurrences.find((o) => o.date === occurrence?.date);
+        const offer = kidsToOfferMove(freshOcc?.pickUp?.cars ?? [], memberId, updatedSelf?.kids ?? []);
         setMovePrompt(offer.length > 0 ? { leg: "pickUp", kids: offer } : null);
       } else {
         setMovePrompt((p) => (p?.leg === "pickUp" ? null : p));
@@ -778,15 +1019,31 @@ export function CarpoolDetail({
     }
   };
 
+  // Editing the default/nearest occurrence behaves exactly like the old
+  // single-schedule app always did — the change applies today and carries
+  // forward. Navigating to view a *different*, further-out date and editing
+  // there is how the new "just this one" override gets used: no extra
+  // confirmation step, the date you're looking at already tells you the
+  // scope.
   const updateLegCars = async (leg: "dropOff" | "pickUp", cars: Car[]) => {
-    const updated = await updateCarpoolSchedule(
-      carpool.code,
-      carpool.day,
-      carpool.destination,
-      leg === "dropOff" ? { time: carpool.dropOff?.time ?? "", cars } : carpool.dropOff,
-      leg === "pickUp" ? { time: carpool.pickUp?.time ?? "", cars } : carpool.pickUp
-    );
-    onCarpoolUpdated(updated);
+    if (!occurrence) return;
+    if (isEditingDefaultOccurrence) {
+      const era = currentEra(series);
+      const result = await updateCarpoolSchedule(
+        carpool.code,
+        { type: era.type, daysOfWeek: era.type === "oneoff" ? undefined : era.daysOfWeek, startDate: todayISO() },
+        leg === "dropOff" ? { time: occurrence.dropOff.time, cars } : occurrence.dropOff,
+        leg === "pickUp" ? { time: occurrence.pickUp.time, cars } : occurrence.pickUp
+      );
+      onCarpoolUpdated(result);
+    } else {
+      const fields =
+        leg === "dropOff"
+          ? { dropOff: { time: occurrence.dropOff.time, cars } }
+          : { pickUp: { time: occurrence.pickUp.time, cars } };
+      const updatedOcc = await updateOccurrence(carpool.code, occurrence.date, fields);
+      onOccurrenceUpdated(updatedOcc);
+    }
   };
 
   const applyMovePrompt = async () => {
@@ -904,46 +1161,85 @@ export function CarpoolDetail({
             </button>
           )}
         </div>
-        <p className="carpool-subline muted">
-          {carpool.day ?? "No day set"}
-          {carpool.dropOff?.time && carpool.pickUp?.time
-            ? `, ${formatTime(carpool.dropOff.time)} - ${formatTime(carpool.pickUp.time)}`
-            : ""}
-          {carpool.destination?.street && (
-            <>
-              ,{" "}
-              <a
-                className="address-link"
-                href={mapsLink(carpool.destination.street, carpool.destination.zip)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {carpool.destination.street}
-                {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
-              </a>
-            </>
-          )}
-        </p>
-        {self && youSummary && (
-          <div className="ai-summary ai-summary-mobile-only">
-            <span className="ai-summary-badge">
-              <span className="ai-summary-sparkle" aria-hidden="true">
-                ✨
+        {upcomingOccurrences.length > 1 && (
+          <div className="form-field">
+            <select
+              className="date-picker-select"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            >
+              {upcomingOccurrences.map((o) => (
+                <option key={o.date} value={o.date}>
+                  {friendlyDateLabel(o.date)}
+                </option>
+              ))}
+            </select>
+            {!isEditingDefaultOccurrence && (
+              <span className="muted">
+                Changing your "can you drive?" status here (or moving a kid between cars) only affects
+                this one date — the usual plan is untouched.
               </span>
-              <span className="ai-summary-name">blisspoolAI</span>
-              <span className="ai-summary-live" aria-hidden="true" />
-            </span>
-            <p className="ai-summary-quote">
-              {typedSummary}
-              <span
-                className={`ai-summary-cursor ${typingDone ? "" : "typing"}`}
-                aria-hidden="true"
-              />
-            </p>
+            )}
           </div>
         )}
-        {hasDrivingStops && (
-          <div className="driving-stops-section driving-stops-mobile-only">{drivingStops}</div>
+        <p className="carpool-subline muted">
+          {upcomingOccurrences.length <= 1 && occurrence?.date ? occurrence.date : ""}
+          {carpool.dropOff?.time && carpool.pickUp?.time
+            ? `${upcomingOccurrences.length <= 1 && occurrence?.date ? ", " : ""}${formatTime(carpool.dropOff.time)} - ${formatTime(carpool.pickUp.time)}`
+            : ""}
+        </p>
+        {carpool.destination?.street && (
+          <p className="carpool-subline muted">
+            <a
+              className="address-link"
+              href={mapsLink(carpool.destination.street, carpool.destination.zip)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {carpool.destination.street}
+              {carpool.destination.zip ? `, ${carpool.destination.zip}` : ""}
+            </a>
+          </p>
+        )}
+        {allMyKidsSkipped && realSelf && occurrence ? (
+          <RemovedKidsNotice
+            className="removed-kids-notice-mobile-only"
+            kids={realSelf.kids}
+            onAddBack={async (kid) => {
+              setTogglingSkipKid(kid);
+              try {
+                const updatedOcc = await skipKid(carpool.code, occurrence.date, kid, false, memberId);
+                onOccurrenceUpdated(updatedOcc);
+              } finally {
+                setTogglingSkipKid(null);
+              }
+            }}
+            togglingKid={togglingSkipKid}
+          />
+        ) : (
+          <>
+            {self && youSummary && (
+              <div className="ai-summary ai-summary-mobile-only">
+                <span className="ai-summary-badge">
+                  <span className="ai-summary-sparkle" aria-hidden="true">
+                    ✨
+                  </span>
+                  <span className="ai-summary-name">blisspoolAI</span>
+                  <span className="ai-summary-live" aria-hidden="true" />
+                </span>
+                <p className="ai-summary-quote">
+                  {typedSummary}
+                  <span
+                    className={`ai-summary-cursor ${typingDone ? "" : "typing"}`}
+                    aria-hidden="true"
+                  />
+                </p>
+              </div>
+            )}
+            {hasDrivingStops && (
+              <div className="driving-stops-section driving-stops-mobile-only">{drivingStops}</div>
+            )}
+          </>
         )}
 
         <div className="schedule-summary">
@@ -954,7 +1250,7 @@ export function CarpoolDetail({
                 label="Drop-off"
                 time={carpool.dropOff?.time ?? ""}
                 seats={legSelfSeats("dropOff")}
-                disabled={!self || togglingDropOff}
+                disabled={!self || togglingDropOff || allMyKidsSkipped}
                 onChange={(delta) => changeLegSeats("dropOff", delta)}
               />
               {movePrompt?.leg === "dropOff" && (
@@ -972,7 +1268,7 @@ export function CarpoolDetail({
                 label="Pick-up"
                 time={carpool.pickUp?.time ?? ""}
                 seats={legSelfSeats("pickUp")}
-                disabled={!self || togglingPickUp}
+                disabled={!self || togglingPickUp || allMyKidsSkipped}
                 onChange={(delta) => changeLegSeats("pickUp", delta)}
               />
               {movePrompt?.leg === "pickUp" && (
@@ -986,6 +1282,36 @@ export function CarpoolDetail({
               )}
             </div>
           </div>
+          {realSelf && realSelf.kids.length > 0 && occurrence && (
+            <div className="skip-kid-links">
+              {realSelf.kids.map((kid) => {
+                const isSkipped = (occurrence.skippedKids ?? []).includes(kid);
+                return (
+                  <button
+                    key={kid}
+                    type="button"
+                    className="text-link"
+                    disabled={togglingSkipKid === kid}
+                    onClick={async () => {
+                      setTogglingSkipKid(kid);
+                      try {
+                        const updatedOcc = await skipKid(carpool.code, occurrence.date, kid, !isSkipped, memberId);
+                        onOccurrenceUpdated(updatedOcc);
+                      } finally {
+                        setTogglingSkipKid(null);
+                      }
+                    }}
+                  >
+                    {togglingSkipKid === kid
+                      ? "Saving..."
+                      : isSkipped
+                        ? `Add ${shortenName(kid)} back this week`
+                        : `${shortenName(kid)} isn't doing it this week`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {!soloMember && (
@@ -1015,6 +1341,21 @@ export function CarpoolDetail({
               </button>
             </div>
           </div>
+        ) : allMyKidsSkipped && realSelf && occurrence ? (
+          <RemovedKidsNotice
+            className="removed-kids-notice-desktop-only"
+            kids={realSelf.kids}
+            onAddBack={async (kid) => {
+              setTogglingSkipKid(kid);
+              try {
+                const updatedOcc = await skipKid(carpool.code, occurrence.date, kid, false, memberId);
+                onOccurrenceUpdated(updatedOcc);
+              } finally {
+                setTogglingSkipKid(null);
+              }
+            }}
+            togglingKid={togglingSkipKid}
+          />
         ) : (
           <>
             {self && youSummary ? (
@@ -1073,9 +1414,40 @@ export function CarpoolDetail({
         onClose={closeCarpoolEditor}
         title="Edit carpool"
         footer={
-          <button type="button" className="pill-button" onClick={requestSaveCarpool} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </button>
+          scheduleAmbiguous() ? (
+            <>
+              {justThisOneAvailable && (
+                <button
+                  type="button"
+                  className="pill-button"
+                  onClick={() => handleScopeClick("occurrence")}
+                  disabled={saving}
+                >
+                  {applyingScope === "occurrence" ? "Saving..." : `Just ${occurrence?.date}`}
+                </button>
+              )}
+              <button
+                type="button"
+                className="pill-button secondary"
+                onClick={() => handleScopeClick("future")}
+                disabled={saving}
+              >
+                From {occurrence?.date} forward
+              </button>
+              <button
+                type="button"
+                className="pill-button secondary"
+                onClick={() => handleScopeClick("all")}
+                disabled={saving}
+              >
+                All events
+              </button>
+            </>
+          ) : (
+            <button type="button" className="pill-button" onClick={handlePlainSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+          )
         }
       >
         <div className="form-field">
@@ -1083,15 +1455,61 @@ export function CarpoolDetail({
           <input value={draftName} onChange={(e) => setDraftName(e.target.value)} />
         </div>
         <div className="form-field">
-          <span className="gate-field-label">Day</span>
-          <select value={draftDay} onChange={(e) => setDraftDay(e.target.value as DayOfWeek)}>
-            {DAYS_OF_WEEK.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+          <span className="gate-field-label">How often</span>
+          <div className="kid-tags">
+            <button
+              type="button"
+              className={`kid-pick ${draftRecurrenceType === "weekly" ? "active" : ""}`}
+              onClick={() => setDraftRecurrenceType("weekly")}
+            >
+              Every week
+            </button>
+            <button
+              type="button"
+              className={`kid-pick ${draftRecurrenceType === "biweekly" ? "active" : ""}`}
+              onClick={() => setDraftRecurrenceType("biweekly")}
+            >
+              Every other week
+            </button>
+            <button
+              type="button"
+              className={`kid-pick ${draftRecurrenceType === "oneoff" ? "active" : ""}`}
+              onClick={() => setDraftRecurrenceType("oneoff")}
+            >
+              Just once
+            </button>
+          </div>
         </div>
+        {draftRecurrenceType !== "oneoff" && (
+          <div className="form-field">
+            <span className="gate-field-label">Which day(s)</span>
+            <div className="kid-tags">
+              {DAYS_OF_WEEK.map((d) => (
+                <button
+                  type="button"
+                  key={d}
+                  className={`kid-pick ${draftDaysOfWeek.includes(d) ? "active" : ""}`}
+                  onClick={() =>
+                    setDraftDaysOfWeek((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))
+                  }
+                >
+                  {d.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {draftRecurrenceType === "oneoff" && (
+          <div className="form-field">
+            <span className="gate-field-label">Date</span>
+            <input
+              type="date"
+              value={draftStartDate}
+              min={todayISO()}
+              onChange={(e) => setDraftStartDate(e.target.value)}
+            />
+          </div>
+        )}
         <div className="form-field">
           <span className="gate-field-label">Drop-off time</span>
           <input
@@ -1134,6 +1552,12 @@ export function CarpoolDetail({
           onChange={setDraftKids}
           label="Which of your kids is in this carpool?"
         />
+        {scheduleAmbiguous() && !justThisOneAvailable && (
+          <p className="muted">
+            "Just this one" isn't offered here — it only applies when how often stays the same and just one
+            day changed at once.
+          </p>
+        )}
       </BottomSheet>
 
       <BottomSheet
@@ -1198,6 +1622,28 @@ export function CarpoolDetail({
         <p>
           You've removed all of your kids from this carpool. Saving will remove you
           {household?.coParentId ? " (and your linked co-parent, if they're in it too)" : ""} from it.
+        </p>
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!confirmingScope}
+        onClose={closeConfirmingScope}
+        title={confirmingScope === "all" ? "Change every date?" : "Change this and every future date?"}
+        footer={
+          <>
+            <button type="button" className="pill-button" onClick={closeConfirmingScope} disabled={!!applyingScope}>
+              Cancel
+            </button>
+            <button type="button" className="pill-button secondary" onClick={confirmScopeAndSave} disabled={!!applyingScope}>
+              {applyingScope ? "Saving..." : "Confirm"}
+            </button>
+          </>
+        }
+      >
+        <p className="muted">
+          {confirmingScope === "all"
+            ? "This rewrites every date for this carpool, including ones already past — not just from here forward."
+            : `This changes every date from ${occurrence?.date} onward, but leaves earlier dates as they were.`}
         </p>
       </BottomSheet>
     </div>

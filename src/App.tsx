@@ -7,7 +7,8 @@ import { ProfileEditor } from "./ProfileEditor";
 import { CarpoolsPage } from "./CarpoolsPage";
 import { CarpoolDetail } from "./CarpoolDetail";
 import { AdminPage } from "./AdminPage";
-import type { Carpool } from "./types";
+import type { CarpoolOccurrence, CarpoolSeries } from "./types";
+import type { CarpoolResult } from "./api";
 
 // Apple's set draws these nose-left, except the race car which is nose-right;
 // flip that one so every car visually faces the direction it's driving.
@@ -59,45 +60,67 @@ function AmbientOrbs() {
 
 function App() {
   const { profile, memberId, loading, saveProfile, clearProfile, adoptMemberId } = useProfile();
-  const [selectedCarpool, setSelectedCarpool] = useState<Carpool | null>(null);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [carpools, setCarpools] = useState<Carpool[] | null>(null);
+  const [carpools, setCarpools] = useState<CarpoolSeries[] | null>(null);
+  const [occurrences, setOccurrences] = useState<CarpoolOccurrence[] | null>(null);
 
   // Tie the two top-level screens/overlays to browser history so the back
   // button and iOS/Android edge-swipe close them instead of leaving the app.
-  const closeCarpool = useBackable(Boolean(selectedCarpool), () => setSelectedCarpool(null));
+  const closeCarpool = useBackable(Boolean(selectedCode), () => setSelectedCode(null));
   const closeProfileEditor = useBackable(editingProfile, () => setEditingProfile(false));
+
+  // Replaces every occurrence belonging to `code` with `fresh` — every
+  // mutation endpoint returns the *complete* current occurrence list for the
+  // series it touched, so this is a full replace, not a per-date merge.
+  const mergeOccurrences = (code: string, fresh: CarpoolOccurrence[]) => {
+    setOccurrences((prev) => [...(prev ?? []).filter((o) => o.code !== code), ...fresh]);
+  };
 
   // Keep the already-fresh result of a create/join/edit around locally instead
   // of re-fetching the whole list on every back-navigation — that refetch is
   // what made the list feel slow, and re-reading data we just wrote risked
   // showing a stale pre-edit version if the read landed before it propagated.
-  const upsertCarpool = (updated: Carpool) => {
-    setSelectedCarpool(updated);
+  const upsertCarpool = ({ carpool, occurrences: fresh }: CarpoolResult) => {
+    setSelectedCode(carpool.code);
     setCarpools((prev) => {
-      if (!prev) return prev;
-      const exists = prev.some((c) => c.code === updated.code);
-      return exists ? prev.map((c) => (c.code === updated.code ? updated : c)) : [...prev, updated];
+      if (!prev) return [carpool];
+      const exists = prev.some((c) => c.code === carpool.code);
+      return exists ? prev.map((c) => (c.code === carpool.code ? carpool : c)) : [...prev, carpool];
     });
+    mergeOccurrences(carpool.code, fresh);
   };
 
   // Same cache refresh as upsertCarpool, but never navigates — used when a
   // profile edit re-syncs every carpool the member is in, which may include
   // carpools other than (or none of) whichever one is currently open.
-  const refreshCarpool = (updated: Carpool) => {
-    setSelectedCarpool((prev) => (prev && prev.code === updated.code ? updated : prev));
+  const refreshCarpool = ({ carpool, occurrences: fresh }: CarpoolResult) => {
     setCarpools((prev) => {
       if (!prev) return prev;
-      const exists = prev.some((c) => c.code === updated.code);
-      return exists ? prev.map((c) => (c.code === updated.code ? updated : c)) : [...prev, updated];
+      const exists = prev.some((c) => c.code === carpool.code);
+      return exists ? prev.map((c) => (c.code === carpool.code ? carpool : c)) : [...prev, carpool];
     });
+    mergeOccurrences(carpool.code, fresh);
+  };
+
+  // A single occurrence changed ("just this one" edit scope) — merge that
+  // one date back into the cache without touching any other occurrence.
+  const updateOneOccurrence = (occurrence: CarpoolOccurrence) => {
+    setOccurrences((prev) =>
+      (prev ?? []).map((o) => (o.code === occurrence.code && o.date === occurrence.date ? occurrence : o))
+    );
   };
 
   // Drop a carpool from the cached list once we've left (or it's been
   // deleted because we were the last member) — nothing to upsert back in.
   const removeCarpool = (code: string) => {
     setCarpools((prev) => (prev ? prev.filter((c) => c.code !== code) : prev));
+    setOccurrences((prev) => (prev ? prev.filter((o) => o.code !== code) : prev));
+    setSelectedCode((prev) => (prev === code ? null : prev));
   };
+
+  const selectedCarpool = carpools?.find((c) => c.code === selectedCode) ?? null;
+  const selectedOccurrences = (occurrences ?? []).filter((o) => o.code === selectedCode);
 
   if (window.location.pathname === "/admin") {
     return <AdminPage />;
@@ -163,11 +186,13 @@ function App() {
       <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
         {selectedCarpool ? (
           <CarpoolDetail
-            carpool={selectedCarpool}
+            series={selectedCarpool}
+            occurrences={selectedOccurrences}
             memberId={memberId}
             allKids={profile.kids}
             onBack={closeCarpool}
             onCarpoolUpdated={upsertCarpool}
+            onOccurrenceUpdated={updateOneOccurrence}
             onCarpoolLeft={removeCarpool}
           />
         ) : (
@@ -176,7 +201,11 @@ function App() {
             profile={profile}
             onOpenCarpool={upsertCarpool}
             carpools={carpools}
-            setCarpools={setCarpools}
+            occurrences={occurrences}
+            onCarpoolsLoaded={(result) => {
+              setCarpools(result.carpools);
+              setOccurrences(result.occurrences);
+            }}
           />
         )}
       </main>

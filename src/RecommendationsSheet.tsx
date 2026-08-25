@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { joinCarpool, type RecommendationCard } from "./api";
+import { joinCarpool, type CarpoolResult, type RecommendationCard } from "./api";
 import { BottomSheet } from "./BottomSheet";
-import type { Carpool } from "./types";
 import type { LocalProfile } from "./useProfile";
 
 // Mirrors the app's standard tablet/desktop breakpoint (see index.css).
@@ -123,7 +122,7 @@ export function RecommendationsSheet({
   cards: RecommendationCard[];
   memberId: string;
   profile: LocalProfile;
-  onJoined: (carpool: Carpool) => void;
+  onJoined: (result: CarpoolResult) => void;
 }) {
   const isDesktop = useIsDesktop();
   const [statuses, setStatuses] = useState<Record<string, CardStatus>>({});
@@ -134,7 +133,7 @@ export function RecommendationsSheet({
   const doJoin = async (card: RecommendationCard, kids: string[]) => {
     setStatus(card.carpoolCode, { kind: "joining" });
     try {
-      const carpool = await joinCarpool(card.carpoolCode, {
+      const result = await joinCarpool(card.carpoolCode, {
         id: memberId,
         name: profile.name,
         kids,
@@ -143,7 +142,7 @@ export function RecommendationsSheet({
         street: profile.street,
         zip: profile.zip,
       });
-      onJoined(carpool);
+      onJoined(result);
       setStatus(card.carpoolCode, { kind: "done", addedKids: kids });
     } catch {
       setStatus(card.carpoolCode, { kind: "idle" });

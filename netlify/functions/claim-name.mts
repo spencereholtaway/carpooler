@@ -10,7 +10,7 @@ export default async (req: Request) => {
   }
 
   const key = `name:${name.trim().toLowerCase()}`;
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
   const claimedBy = await store.get(key);
 
   if (claimedBy) {

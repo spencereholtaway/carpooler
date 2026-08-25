@@ -35,7 +35,7 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
 }
 
 export default async (req: Request) => {
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
 
   if (req.method === "POST") return handleMutation(store, req);
 

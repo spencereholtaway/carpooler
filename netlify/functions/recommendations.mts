@@ -2,8 +2,28 @@ import type { Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
 type Member = { id: string; name: string; kids: string[] };
-type Carpool = { code: string; name: string; day: string; members: Member[] };
+// Only `.code`/`.name`/`.members` are used by computeRecommendations below —
+// deliberately shape-agnostic about day/schedule fields, since this endpoint
+// reads raw `code:*` blobs without migrating them (see carpoolDayLabel).
+type Carpool = { code: string; name: string; members: Member[] };
+type RecurrenceEra = { startDate: string; type: "weekly" | "biweekly" | "oneoff"; daysOfWeek: string[] };
+type RawCarpool = Carpool & { day?: string; recurrenceEras?: RecurrenceEra[] };
 type ServerProfile = { name: string; kids: string[] };
+
+// Best-effort display label only — this endpoint doesn't migrate or
+// generate occurrences (it never reads/writes any schedule data), so a
+// blob here may still be in either the legacy `day` shape or the new
+// `recurrenceEras` shape depending on whether carpools.mts has touched it
+// yet. Handles both without needing the full migration duplicated here.
+function carpoolDayLabel(raw: RawCarpool): string {
+  if (typeof raw.day === "string") return raw.day;
+  const eras = raw.recurrenceEras ?? [];
+  if (eras.length === 0) return "";
+  const today = new Date().toISOString().slice(0, 10);
+  let era = eras[0];
+  for (const e of eras) if (e.startDate <= today) era = e;
+  return era.type === "oneoff" ? "One-time" : era.daysOfWeek.join(", ");
+}
 
 type RecommendationCard = {
   carpoolCode: string;
@@ -89,7 +109,7 @@ export default async (req: Request) => {
   const memberId = new URL(req.url).searchParams.get("memberId") ?? "";
   if (!memberId) return new Response("Missing memberId", { status: 400 });
 
-  const store = getStore("carpools", { consistency: "strong" });
+  const store = getStore(process.env.CARPOOL_STORE || "carpools", { consistency: "strong" });
 
   const ownProfile = (await store.get(`profile:${memberId}`, { type: "json" })) as ServerProfile | null;
   if (!ownProfile) return new Response(JSON.stringify({ recs: [] }), { headers: { "Content-Type": "application/json" } });
@@ -105,12 +125,13 @@ export default async (req: Request) => {
   ];
 
   const { blobs: codeBlobs } = await store.list({ prefix: "code:" });
-  const carpools = (
+  const rawCarpools = (
     await Promise.all(codeBlobs.map((b) => store.get(b.key, { type: "json" })))
-  ).filter(Boolean) as Carpool[];
+  ).filter(Boolean) as RawCarpool[];
+  const carpools = rawCarpools as Carpool[];
 
   const raw = computeRecommendations(owners, carpools);
-  const carpoolByCode = new Map(carpools.map((c) => [c.code, c]));
+  const carpoolByCode = new Map(rawCarpools.map((c) => [c.code, c]));
 
   // Collapse per-kid results into one card per carpool, since the same
   // carpool can be recommended for more than one kid at once.
@@ -125,7 +146,7 @@ export default async (req: Request) => {
     return {
       carpoolCode: code,
       carpoolName: carpool.name,
-      carpoolDay: carpool.day,
+      carpoolDay: carpoolDayLabel(carpool),
       kidNames: [...kidNames],
       memberFirstNames: carpool.members.map((m) => firstName(m.name)),
     };

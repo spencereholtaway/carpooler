@@ -1,10 +1,21 @@
-import type { Address, Carpool, DayOfWeek, Leg, Member } from "./types";
+import type {
+  Address,
+  CarpoolOccurrence,
+  CarpoolSeries,
+  DayOfWeek,
+  Leg,
+  Member,
+  RecurrenceType,
+} from "./types";
 import type { LocalProfile } from "./useProfile";
 
 async function unwrap(res: Response) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+export type CarpoolsResult = { carpools: CarpoolSeries[]; occurrences: CarpoolOccurrence[] };
+export type CarpoolResult = { carpool: CarpoolSeries; occurrences: CarpoolOccurrence[] };
 
 export async function claimName(
   name: string,
@@ -19,29 +30,31 @@ export async function claimName(
   return res.json();
 }
 
-export async function listCarpools(memberId: string): Promise<Carpool[]> {
+export async function listCarpools(memberId: string): Promise<CarpoolsResult> {
   return unwrap(await fetch(`/api/carpools?memberId=${encodeURIComponent(memberId)}`));
 }
 
+export type Recurrence = { type: RecurrenceType; daysOfWeek?: DayOfWeek[]; startDate: string };
+
 export async function createCarpool(
   name: string,
-  day: DayOfWeek,
+  recurrence: Recurrence,
   destination: Address,
   dropOff: Leg,
   pickUp: Leg,
   member: Member,
   timezone: string
-): Promise<Carpool> {
+): Promise<CarpoolResult> {
   return unwrap(
     await fetch("/api/carpools", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, day, destination, dropOff, pickUp, member, timezone }),
+      body: JSON.stringify({ name, recurrence, destination, dropOff, pickUp, member, timezone }),
     })
   );
 }
 
-export async function joinCarpool(code: string, member: Member): Promise<Carpool> {
+export async function joinCarpool(code: string, member: Member): Promise<CarpoolResult> {
   return unwrap(
     await fetch("/api/carpools/join", {
       method: "POST",
@@ -124,20 +137,114 @@ export async function getRecommendations(memberId: string): Promise<Recommendati
   return recs;
 }
 
+// "This and all future, starting <startDate>" — the only edit scope that
+// applies to a day/time/driver-default change. `startDate` today closes and
+// reopens the current era in place; a future date splits it. See EditScope
+// in types.ts for why there's no "all, including past" for schedule fields.
 export async function updateCarpoolSchedule(
   code: string,
-  day: DayOfWeek,
-  destination: Address,
+  recurrence: Recurrence,
   dropOff: Leg,
-  pickUp: Leg,
-  name?: string,
-  timezone?: string
-): Promise<Carpool> {
+  pickUp: Leg
+): Promise<CarpoolResult> {
   return unwrap(
     await fetch("/api/carpools/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, day, destination, dropOff, pickUp, name, timezone }),
+      body: JSON.stringify({
+        code,
+        scope: "thisAndFuture",
+        startDate: recurrence.startDate,
+        type: recurrence.type,
+        daysOfWeek: recurrence.daysOfWeek,
+        dropOff,
+        pickUp,
+      }),
+    })
+  );
+}
+
+// "All, including past" — only ever offered for name/destination, since a
+// label isn't a fact of history the way a schedule field is.
+export async function updateCarpoolLabel(
+  code: string,
+  fields: { name?: string; destination?: Address; timezone?: string }
+): Promise<CarpoolResult> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, scope: "all", ...fields }),
+    })
+  );
+}
+
+// "Just this one" — overrides a single occurrence's drop-off and/or pick-up,
+// never touching the series defaults or any other date.
+export async function updateOccurrence(
+  code: string,
+  date: string,
+  fields: { dropOff?: Leg; pickUp?: Leg }
+): Promise<CarpoolOccurrence> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, scope: "occurrence", date, ...fields }),
+    })
+  );
+}
+
+// "All" — a genuine retroactive correction, every occurrence past and
+// future, overriding even individually-overridden ones. For "we always had
+// the wrong time on file," not a real schedule change.
+export async function updateTimeEverywhere(
+  code: string,
+  leg: "dropOff" | "pickUp",
+  time: string
+): Promise<CarpoolResult> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, scope: "allTime", leg, time }),
+    })
+  );
+}
+
+// "Just this one," when the day itself changed — reschedules a single
+// occurrence to a different date without touching the recurring pattern.
+// Throws (409) if the target date already has a real occurrence on it.
+export async function moveOccurrence(
+  code: string,
+  fromDate: string,
+  toDate: string,
+  fields: { dropOff?: Leg; pickUp?: Leg }
+): Promise<CarpoolResult> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, scope: "moveOccurrence", fromDate, toDate, ...fields }),
+    })
+  );
+}
+
+// "My kid isn't doing it this week" — pulls one kid out of every car for a
+// single occurrence (skipped: true), or re-adds them to the default pool
+// (skipped: false). Never touches anyone else's seats/eligibility.
+export async function skipKid(
+  code: string,
+  date: string,
+  kid: string,
+  skipped: boolean,
+  memberId: string
+): Promise<CarpoolOccurrence> {
+  return unwrap(
+    await fetch("/api/carpools/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, scope: "skipKid", date, kid, skipped, memberId }),
     })
   );
 }
