@@ -407,6 +407,21 @@ export function CarpoolsPage({
     .filter((g) => g.date !== today)
     .concat(todayGhostRows.length > 0 ? [{ date: today, heading: "Today", rows: todayGhostRows }] : [])
     .sort((a, b) => a.date.localeCompare(b.date));
+  const weekBreakIndex = upcomingGroups.findIndex(
+    (g, i) => i > 0 && mondayOfISO(g.date) !== mondayOfISO(upcomingGroups[i - 1].date)
+  );
+
+  const recsBanner = recCards.length > 0 && (
+    <div className="recs-banner">
+      <span className="recs-banner-headline">
+        {recCards.length} recommended carpool{recCards.length === 1 ? "" : "s"}
+        <span className="beta-badge">Beta</span>
+      </span>
+      <button type="button" className="pill-button" onClick={() => setShowRecs(true)}>
+        See recommendations
+      </button>
+    </div>
+  );
 
   return (
     <div className="carpools-page">
@@ -446,8 +461,11 @@ export function CarpoolsPage({
         <section className="carpools-list">
           {upcomingGroups.map(({ date, heading, rows }, i) => (
             <div className="carpool-day-group" key={date}>
-              {i > 0 && mondayOfISO(date) !== mondayOfISO(upcomingGroups[i - 1].date) && (
-                <hr className="week-divider" />
+              {i === weekBreakIndex && (
+                <>
+                  {recsBanner}
+                  <hr className="week-divider" />
+                </>
               )}
               <span className="carpool-row-meta carpool-day-label">{heading}</span>
               {rows.map((row) => {
@@ -509,17 +527,7 @@ export function CarpoolsPage({
         </section>
       )}
 
-      {recCards.length > 0 && (
-        <div className="recs-banner">
-          <span className="recs-banner-headline">
-            {recCards.length} recommended carpool{recCards.length === 1 ? "" : "s"}
-            <span className="beta-badge">Beta</span>
-          </span>
-          <button type="button" className="pill-button" onClick={() => setShowRecs(true)}>
-            See recommendations
-          </button>
-        </div>
-      )}
+      {weekBreakIndex === -1 && recsBanner}
 
       <div className="section-actions">
         <button type="button" className="pill-button secondary small" onClick={openJoin}>
