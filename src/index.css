@@ -1069,7 +1069,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0px;
+  gap: 10px;
   padding: 0 0 0 4px;
   border: none;
   background: none;
@@ -1137,7 +1137,7 @@ button {
   font-family: var(--serif);
   font-style: italic;
   font-size: 26px;
-  line-height: 1.35;
+  line-height: 1.25;
   color: var(--text-h);
 }
 
