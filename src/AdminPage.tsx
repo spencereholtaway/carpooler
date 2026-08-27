@@ -693,6 +693,10 @@ export function AdminPage() {
   const [datavizTab, setDatavizTab] = useState<DatavizTab>("geography");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [carpools, setCarpools] = useState<AdminCarpool[]>([]);
+  // Kept alongside the flattened AdminCarpool list (which collapses every
+  // carpool down to one representative occurrence) so the per-date lookup
+  // below has the raw, per-date data to pick from.
+  const [occurrences, setOccurrences] = useState<CarpoolOccurrence[]>([]);
   const [updates, setUpdates] = useState<AdminUpdate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -712,6 +716,7 @@ export function AdminPage() {
       const data = await res.json();
       setUsers(data.users);
       setCarpools(toAdminCarpools(data.carpools, data.occurrences ?? []));
+      setOccurrences(data.occurrences ?? []);
       const updatesRes = await fetch("/api/updates");
       if (updatesRes.ok) setUpdates((await updatesRes.json()).updates);
       localStorage.setItem(KEY_STORAGE, candidateKey);
@@ -871,8 +876,14 @@ export function AdminPage() {
   const [savingCarpool, setSavingCarpool] = useState(false);
   const [legTab, setLegTab] = useState<"dropOff" | "pickUp">("dropOff");
   const [legViewMode, setLegViewMode] = useState<"kid" | "parent">("kid");
+  // "" means "the current/nearest occurrence" (the existing editable view);
+  // picking a date switches to a read-only look at that exact occurrence,
+  // so a driver/kid mismatch on a specific date (like a stale skip) can
+  // actually be seen instead of only ever inferred from the recurring default.
+  const [selectedOccDate, setSelectedOccDate] = useState<string>("");
   const startEditCarpool = (c: AdminCarpool) => {
     setEditingCarpool(c.code);
+    setSelectedOccDate("");
     setCarpoolDraft({
       ...c,
       destination: { ...(c.destination ?? { street: "", zip: "" }) },
@@ -966,6 +977,19 @@ export function AdminPage() {
   // The panel's carpool data needs to reflect the latest load (e.g. after
   // adding/removing a member), not the stale snapshot captured when it opened.
   const liveEditingCarpool = editingCarpool ? carpools.find((c) => c.code === editingCarpool) : null;
+  const editingCarpoolOccurrences = editingCarpool
+    ? occurrences.filter((o) => o.code === editingCarpool).sort((a, b) => a.date.localeCompare(b.date))
+    : [];
+  const viewedOccurrence = selectedOccDate
+    ? editingCarpoolOccurrences.find((o) => o.date === selectedOccDate) ?? null
+    : null;
+  // Viewing a specific date swaps in that occurrence's actual dropOff/pickUp
+  // (and exposes its skippedKids) without touching the editable "current"
+  // view underneath — this is a read-only lens, not a new edit surface.
+  const displayEditingCarpool =
+    liveEditingCarpool && viewedOccurrence
+      ? { ...liveEditingCarpool, dropOff: viewedOccurrence.dropOff, pickUp: viewedOccurrence.pickUp }
+      : liveEditingCarpool;
   // Same idea for the user panel: co-parent link/unlink/combine happen
   // immediately, so the panel needs the freshly reloaded user, not the
   // snapshot captured when it opened.
@@ -1727,6 +1751,29 @@ export function AdminPage() {
               </table>
             </div>
 
+            <div className="admin-occurrence-picker">
+              <label>
+                Viewing
+                <select value={selectedOccDate} onChange={(e) => setSelectedOccDate(e.target.value)}>
+                  <option value="">Current schedule (editable)</option>
+                  {editingCarpoolOccurrences.map((o) => (
+                    <option key={o.date} value={o.date}>
+                      {o.date}
+                      {o.overridden.dropOff || o.overridden.pickUp ? " (overridden)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {viewedOccurrence && (
+                <span className="admin-occurrence-note">
+                  Read-only — showing exactly what's assigned on this date.
+                  {viewedOccurrence.skippedKids && viewedOccurrence.skippedKids.length > 0
+                    ? ` Opted out this date: ${viewedOccurrence.skippedKids.join(", ")}.`
+                    : ""}
+                </span>
+              )}
+            </div>
+
             <div className="admin-leg-tabs-row">
               <div className="admin-leg-tabs">
                 <button
@@ -1763,17 +1810,25 @@ export function AdminPage() {
             </div>
             {legViewMode === "kid" ? (
               <LegAssignments
-                carpool={liveEditingCarpool}
+                carpool={displayEditingCarpool}
                 leg={legTab}
                 label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
-                onMoveKid={(kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)}
+                onMoveKid={
+                  viewedOccurrence
+                    ? () => {}
+                    : (kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)
+                }
               />
             ) : (
               <LegAssignmentsByParent
-                carpool={liveEditingCarpool}
+                carpool={displayEditingCarpool}
                 leg={legTab}
                 label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
-                onMoveKid={(kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)}
+                onMoveKid={
+                  viewedOccurrence
+                    ? () => {}
+                    : (kid, driverId) => moveKid(liveEditingCarpool.code, legTab, kid, driverId)
+                }
               />
             )}
           </div>

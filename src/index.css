@@ -3120,8 +3120,10 @@ button {
 
 .admin-household-kid-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   padding: 10px 0;
   border-top: 1px solid var(--admin-border-soft);
 }
@@ -3134,10 +3136,40 @@ button {
 .admin-household-name {
   font-weight: 600;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .admin-household-kid-row .kid-tags {
   justify-content: flex-start;
+  gap: 6px;
+}
+
+.admin-household-kid-row .kid-pick {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.admin-occurrence-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  border-top: 1px solid var(--admin-border-soft);
+  padding-top: 14px;
+}
+
+.admin-occurrence-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-occurrence-note {
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+  opacity: 0.8;
 }
 
 .admin-leg-tabs-row {
