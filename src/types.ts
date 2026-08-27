@@ -171,8 +171,12 @@ export function weeksAheadOf(dateISO: string, fromISO: string): number {
   return Math.round((a - b) / (7 * 86400000));
 }
 
-export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+// "Today" as a calendar date in `timeZone` (defaults to the browser's own
+// zone). Deliberately NOT `new Date().toISOString().slice(0, 10)` — that
+// converts to UTC first, so anyone west of UTC sees tomorrow's date starting
+// in the evening (e.g. 9pm Pacific is already after midnight UTC).
+export function todayISO(timeZone?: string): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: timeZone || detectTimezone() });
 }
 
 // "Today, August 25" / "Tomorrow, August 26" / "Wednesday, August 27" — a
@@ -192,7 +196,7 @@ export function friendlyDateLabel(dateISO: string): string {
 // startDate has already arrived. Mirrors the same lookup every backend
 // function that touches a series does server-side.
 export function currentEra(series: CarpoolSeries): RecurrenceEra {
-  const today = todayISO();
+  const today = todayISO(series.timezone);
   let found = series.recurrenceEras[0];
   for (const era of series.recurrenceEras) {
     if (era.startDate <= today) found = era;
@@ -261,10 +265,11 @@ export function toCarpoolView(series: CarpoolSeries, occurrence: CarpoolOccurren
 // one at/after today, falling back to the most recent past one on the
 // (should-never-happen) chance none are upcoming.
 export function pickRepresentativeOccurrence(
-  occurrences: CarpoolOccurrence[]
+  occurrences: CarpoolOccurrence[],
+  timezone?: string
 ): CarpoolOccurrence | undefined {
   const live = occurrences.filter((o) => !o.cancelled);
-  const today = todayISO();
+  const today = todayISO(timezone);
   const upcoming = live.filter((o) => o.date >= today).sort((a, b) => a.date.localeCompare(b.date));
   if (upcoming.length > 0) return upcoming[0];
   return [...live].sort((a, b) => b.date.localeCompare(a.date))[0];
