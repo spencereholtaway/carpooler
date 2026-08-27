@@ -378,10 +378,13 @@ export default async (req: Request) => {
   // A coparent row that was auto-added on this member's behalf (see
   // autoAddCoParent below) is a snapshot, not an independent choice — keep it
   // in step with this member's current kids rather than letting a kid who
-  // was removed here linger under the coparent's row forever. If that sync
-  // leaves the coparent with no kids of their own in this carpool either,
-  // they're leaving too.
-  let removedCoParentId: string | null = null;
+  // was removed here linger under the coparent's row forever. Even if that
+  // sync leaves the coparent with no shared kids left in this carpool, they
+  // stay as a member (just with an empty kids list, same as anyone not
+  // currently offering a ride) rather than being silently dropped — the
+  // whole point of auto-adding them was so they can see where their kid's
+  // rides stand, and that visibility shouldn't vanish the moment the other
+  // parent unenrolls that kid.
   if (!isNewJoin && member.coparentId) {
     const coIndex = carpool.members.findIndex((m) => m.id === member.coparentId);
     if (coIndex !== -1 && carpool.members[coIndex].coparentId === member.id) {
@@ -390,12 +393,7 @@ export default async (req: Request) => {
         | null;
       if (coProfile) {
         const syncedKids = member.kids.filter((k) => coProfile.kids.includes(k));
-        if (syncedKids.length === 0) {
-          removedCoParentId = member.coparentId;
-          dropMember(carpool, era, member.coparentId);
-        } else {
-          carpool.members[coIndex] = { ...carpool.members[coIndex], kids: syncedKids };
-        }
+        carpool.members[coIndex] = { ...carpool.members[coIndex], kids: syncedKids };
       }
     }
   }
@@ -422,10 +420,8 @@ export default async (req: Request) => {
     await autoAddCoParent(store, carpool, member.id, member.kids);
   }
 
-  // Leaving members always need their own carpool-code list cleaned up; a
-  // cascaded coparent removal needs the same treatment.
+  // Leaving members always need their own carpool-code list cleaned up.
   if (isLeaving) await removeCodeFromMember(store, member.id, code);
-  if (removedCoParentId) await removeCodeFromMember(store, removedCoParentId, code);
 
   // No one left — delete the carpool itself (and its occurrences) rather
   // than writing back an empty shell. This only happens as a side effect of
