@@ -202,6 +202,48 @@ async function generateOccurrences(store: ReturnType<typeof getStore>, series: C
     );
   }
 }
+async function listOccurrences(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolOccurrence[]> {
+  const { blobs } = await store.list({ prefix: `occ:${code}:` });
+  const occs = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
+  return occs.filter(Boolean) as CarpoolOccurrence[];
+}
+
+// Self-heals a specific stale pattern from before skipKid also cleared a
+// driver's other riders when the skip left them with none of their own
+// kids in the car: a leg where every one of the driver's own kids is
+// marked skipped for this occurrence, yet other members' kids are still
+// sitting in that now-driverless-in-spirit car. Moves them back out so
+// they fall back to their own default parent, same as a fresh skip would.
+function repairOrphanedRiders(occ: CarpoolOccurrence, members: Member[]): boolean {
+  const skipped = new Set(occ.skippedKids ?? []);
+  if (skipped.size === 0) return false;
+  const ownKidsByMember = new Map(members.map((m) => [m.id, new Set(m.kids)]));
+  let changed = false;
+  for (const leg of [occ.dropOff, occ.pickUp]) {
+    for (const car of leg.cars) {
+      const ownKids = ownKidsByMember.get(car.driverId);
+      if (!ownKids || ownKids.size === 0) continue;
+      if (![...ownKids].every((k) => skipped.has(k))) continue;
+      if (car.kids.some((k) => !ownKids.has(k))) {
+        car.kids = car.kids.filter((k) => ownKids.has(k));
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+async function repairOccurrences(store: ReturnType<typeof getStore>, series: CarpoolSeries): Promise<void> {
+  const today = todayISO();
+  const occurrences = await listOccurrences(store, series.code);
+  await Promise.all(
+    occurrences.map(async (occ) => {
+      if (occ.historized || isoCompare(occ.date, today) < 0) return;
+      if (repairOrphanedRiders(occ, series.members)) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
+    })
+  );
+}
+
 async function loadSeries(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolSeries | null> {
   const raw = await store.get(`code:${code}`, { type: "json" });
   if (!raw) return null;
@@ -213,12 +255,8 @@ async function loadSeries(store: ReturnType<typeof getStore>, code: string): Pro
     series = raw as CarpoolSeries;
   }
   await generateOccurrences(store, series);
+  await repairOccurrences(store, series);
   return series;
-}
-async function listOccurrences(store: ReturnType<typeof getStore>, code: string): Promise<CarpoolOccurrence[]> {
-  const { blobs } = await store.list({ prefix: `occ:${code}:` });
-  const occs = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
-  return occs.filter(Boolean) as CarpoolOccurrence[];
 }
 
 function sanitizedEra(
@@ -446,11 +484,21 @@ export default async (req: Request) => {
     const current = new Set(occ.skippedKids ?? []);
     if (skipped) {
       current.add(kid);
+      const ownKids = new Set(carpool.members.find((m) => m.id === memberId)?.kids ?? []);
       // Pull them out of every car on both legs — "not going" means not
       // riding with anyone, not just "no longer your responsibility." The
       // car entry itself (and its seat count) is left in place, not deleted.
-      occ.dropOff = { ...occ.dropOff, cars: occ.dropOff.cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) })) };
-      occ.pickUp = { ...occ.pickUp, cars: occ.pickUp.cars.map((c) => ({ ...c, kids: c.kids.filter((k) => k !== kid) })) };
+      // If this was the skipping member's own car and none of their kids
+      // are left in it, they had no reason left to drive that leg — clear
+      // any other members' kids too, so they fall back to their own
+      // parent's car instead of silently riding with someone no longer going.
+      const dropSkip = (c: Car) => {
+        const kids = c.kids.filter((k) => k !== kid);
+        if (c.driverId === memberId && !kids.some((k) => ownKids.has(k))) return { ...c, kids: [] };
+        return { ...c, kids };
+      };
+      occ.dropOff = { ...occ.dropOff, cars: occ.dropOff.cars.map(dropSkip) };
+      occ.pickUp = { ...occ.pickUp, cars: occ.pickUp.cars.map(dropSkip) };
     } else {
       current.delete(kid);
       // Put them back in the requesting member's own car specifically,

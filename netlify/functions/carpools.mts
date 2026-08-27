@@ -195,6 +195,42 @@ async function listOccurrences(store: ReturnType<typeof getStore>, code: string)
   return occs.filter(Boolean) as CarpoolOccurrence[];
 }
 
+// Self-heals a specific stale pattern from before skipKid also cleared a
+// driver's other riders when the skip left them with none of their own
+// kids in the car: a leg where every one of the driver's own kids is
+// marked skipped for this occurrence, yet other members' kids are still
+// sitting in that now-driverless-in-spirit car. Moves them back out so
+// they fall back to their own default parent, same as a fresh skip would.
+function repairOrphanedRiders(occ: CarpoolOccurrence, members: Member[]): boolean {
+  const skipped = new Set(occ.skippedKids ?? []);
+  if (skipped.size === 0) return false;
+  const ownKidsByMember = new Map(members.map((m) => [m.id, new Set(m.kids)]));
+  let changed = false;
+  for (const leg of [occ.dropOff, occ.pickUp]) {
+    for (const car of leg.cars) {
+      const ownKids = ownKidsByMember.get(car.driverId);
+      if (!ownKids || ownKids.size === 0) continue;
+      if (![...ownKids].every((k) => skipped.has(k))) continue;
+      if (car.kids.some((k) => !ownKids.has(k))) {
+        car.kids = car.kids.filter((k) => ownKids.has(k));
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+async function repairOccurrences(store: ReturnType<typeof getStore>, series: CarpoolSeries): Promise<void> {
+  const today = todayISO();
+  const occurrences = await listOccurrences(store, series.code);
+  await Promise.all(
+    occurrences.map(async (occ) => {
+      if (occ.historized || isoCompare(occ.date, today) < 0) return;
+      if (repairOrphanedRiders(occ, series.members)) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
+    })
+  );
+}
+
 // Reads a carpool by code, migrating it in place if it's still the legacy
 // shape, then tops up its occurrences. This is the one place a `code:{code}`
 // blob gets converted — every other reader of a series should already be
@@ -212,6 +248,7 @@ async function loadSeries(store: ReturnType<typeof getStore>, code: string): Pro
   }
 
   await generateOccurrences(store, series);
+  await repairOccurrences(store, series);
   return series;
 }
 

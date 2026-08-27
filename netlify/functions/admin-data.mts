@@ -204,6 +204,42 @@ async function restampEra(
     })
   );
 }
+// Self-heals a specific stale pattern from before skipKid also cleared a
+// driver's other riders when the skip left them with none of their own
+// kids in the car: a leg where every one of the driver's own kids is
+// marked skipped for this occurrence, yet other members' kids are still
+// sitting in that now-driverless-in-spirit car. Moves them back out so
+// they fall back to their own default parent, same as a fresh skip would.
+function repairOrphanedRiders(occ: CarpoolOccurrence, members: Member[]): boolean {
+  const skipped = new Set(occ.skippedKids ?? []);
+  if (skipped.size === 0) return false;
+  const ownKidsByMember = new Map(members.map((m) => [m.id, new Set(m.kids)]));
+  let changed = false;
+  for (const leg of [occ.dropOff, occ.pickUp]) {
+    for (const car of leg.cars) {
+      const ownKids = ownKidsByMember.get(car.driverId);
+      if (!ownKids || ownKids.size === 0) continue;
+      if (![...ownKids].every((k) => skipped.has(k))) continue;
+      if (car.kids.some((k) => !ownKids.has(k))) {
+        car.kids = car.kids.filter((k) => ownKids.has(k));
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+async function repairOccurrences(store: ReturnType<typeof getStore>, series: Carpool): Promise<void> {
+  const today = todayISO();
+  const occurrences = await listOccurrences(store, series.code);
+  await Promise.all(
+    occurrences.map(async (occ) => {
+      if (occ.historized || isoCompare(occ.date, today) < 0) return;
+      if (repairOrphanedRiders(occ, series.members)) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
+    })
+  );
+}
+
 // Reads+migrates a series by code, same as carpools.mts's loadSeries.
 async function loadSeries(store: ReturnType<typeof getStore>, code: string): Promise<Carpool | null> {
   const raw = await store.get(`code:${code}`, { type: "json" });
@@ -216,6 +252,7 @@ async function loadSeries(store: ReturnType<typeof getStore>, code: string): Pro
     series = raw as Carpool;
   }
   await generateOccurrences(store, series);
+  await repairOccurrences(store, series);
   return series;
 }
 function currentEra(series: Carpool): RecurrenceEra {
