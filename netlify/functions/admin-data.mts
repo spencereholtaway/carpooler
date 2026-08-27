@@ -242,6 +242,16 @@ function setSeats(leg: Leg, member: Member, seats: number) {
   const existing = leg.cars.find((c) => c.driverId === member.id);
   if (existing) {
     existing.seats = seats;
+    // Seats cap other members' kids only, same as sanitizeLeg in
+    // carpools-schedule.mts — trim any that no longer fit so a lowered
+    // count actually frees the car up instead of just relabeling it.
+    let otherSeatsLeft = seats;
+    existing.kids = existing.kids.filter((k) => {
+      if (member.kids.includes(k)) return true;
+      if (otherSeatsLeft <= 0) return false;
+      otherSeatsLeft -= 1;
+      return true;
+    });
     return;
   }
   const claimed = new Set(leg.cars.flatMap((c) => c.kids));

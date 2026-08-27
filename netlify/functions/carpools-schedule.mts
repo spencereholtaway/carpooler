@@ -91,13 +91,23 @@ function sanitizeLeg(
   for (const car of leg?.cars ?? []) {
     const ownKids = ownKidsByMember.get(car.driverId) ?? new Set<string>();
     const isEligible = eligibleDriverIds.has(car.driverId);
+    const seats = clampSeats(car.seats);
+    // Seats cap other members' kids only — a driver's own kids always ride
+    // along regardless of the seat count (see the `free` comment in
+    // CarpoolDetail.tsx). Excess other-kids beyond capacity are dropped
+    // rather than persisted, so lowering seats actually frees the car up.
+    let otherSeatsLeft = seats;
     const kids = car.kids.filter((k) => {
       if (seenKids.has(k)) return false; // a kid can only ride in one car per leg
       if (!isEligible && !ownKids.has(k)) return false;
+      if (!ownKids.has(k)) {
+        if (otherSeatsLeft <= 0) return false;
+        otherSeatsLeft -= 1;
+      }
       seenKids.add(k);
       return true;
     });
-    if (isEligible || kids.length > 0) cars.push({ driverId: car.driverId, kids, seats: clampSeats(car.seats) });
+    if (isEligible || kids.length > 0) cars.push({ driverId: car.driverId, kids, seats });
   }
   return { time: leg?.time ?? "", cars };
 }
