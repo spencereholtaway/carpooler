@@ -274,7 +274,7 @@ export function CarpoolsPage({
   // Wednesday would silently leave a stale Tuesday date selected.
   useEffect(() => {
     if (recurrenceType === "oneoff" || daysOfWeek.length === 0) return;
-    const today = todayISO();
+    const today = todayISO(timezone);
     const anchor = startMode === "nextWeek" ? addDaysISO(today, 7) : today;
     setOtherStartDate(nextValidDate(daysOfWeek, anchor));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,7 +330,7 @@ export function CarpoolsPage({
       const dropOff = { time: dropOffTime, cars: [] };
       const pickUp = { time: pickUpTime, cars: [] };
       const startDate =
-        recurrenceType === "oneoff" ? otherStartDate : otherStartDate || nextValidDate(daysOfWeek, todayISO());
+        recurrenceType === "oneoff" ? otherStartDate : otherStartDate || nextValidDate(daysOfWeek, todayISO(timezone));
       const result = await createCarpool(
         trimmed,
         { type: recurrenceType, daysOfWeek: recurrenceType === "oneoff" ? undefined : daysOfWeek, startDate },
@@ -677,7 +677,7 @@ export function CarpoolsPage({
               <input
                 type="date"
                 value={otherStartDate}
-                min={todayISO()}
+                min={todayISO(timezone)}
                 onChange={(e) => setOtherStartDate(e.target.value)}
               />
             )}
@@ -690,7 +690,7 @@ export function CarpoolsPage({
             <input
               type="date"
               value={otherStartDate}
-              min={todayISO()}
+              min={todayISO(timezone)}
               onChange={(e) => setOtherStartDate(e.target.value)}
             />
           </div>

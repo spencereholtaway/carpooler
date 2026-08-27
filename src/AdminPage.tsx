@@ -67,7 +67,7 @@ function toAdminCarpools(series: CarpoolSeries[], occurrences: CarpoolOccurrence
     byCode.get(o.code)!.push(o);
   }
   return series.map((s) => {
-    const view = toCarpoolView(s, pickRepresentativeOccurrence(byCode.get(s.code) ?? []));
+    const view = toCarpoolView(s, pickRepresentativeOccurrence(byCode.get(s.code) ?? [], s.timezone));
     const era = currentEra(s);
     return { ...view, timezone: s.timezone, recurrenceType: era.type, daysOfWeek: era.daysOfWeek, eraStartDate: era.startDate };
   });
@@ -916,7 +916,7 @@ export function AdminPage() {
       // A day-of-week/frequency/time change can never be retroactive — it
       // always takes effect starting today (or the picked date, for a
       // one-off), same as the "This event forward" scope in the real app.
-      const startDate = carpoolDraft.recurrenceType === "oneoff" ? carpoolDraft.eraStartDate : todayISO();
+      const startDate = carpoolDraft.recurrenceType === "oneoff" ? carpoolDraft.eraStartDate : todayISO(carpoolDraft.timezone);
       await callSchedule({
         code: carpoolDraft.code,
         scope: "thisAndFuture",
@@ -1539,7 +1539,7 @@ export function AdminPage() {
                   <input
                     type="date"
                     value={carpoolDraft.eraStartDate}
-                    min={todayISO()}
+                    min={todayISO(carpoolDraft.timezone)}
                     onChange={(e) => setCarpoolDraft({ ...carpoolDraft, eraStartDate: e.target.value })}
                   />
                 </label>

@@ -613,9 +613,9 @@ export function CarpoolDetail({
   // `carpool` (a flat view derived from series+occurrence), completely
   // unchanged from when that shape came straight from the server.
   const upcomingOccurrences = [...occurrences]
-    .filter((o) => o.date >= todayISO() && !o.cancelled)
+    .filter((o) => o.date >= todayISO(series.timezone) && !o.cancelled)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const defaultDate = pickRepresentativeOccurrence(occurrences)?.date;
+  const defaultDate = pickRepresentativeOccurrence(occurrences, series.timezone)?.date;
   const [selectedDate, setSelectedDate] = useState(initialDate ?? defaultDate);
   const occurrence = occurrences.find((o) => o.date === selectedDate) ?? occurrences.find((o) => o.date === defaultDate);
   const isEditingDefaultOccurrence = !occurrence || occurrence.date === defaultDate;
@@ -677,7 +677,7 @@ export function CarpoolDetail({
   const [draftDaysOfWeek, setDraftDaysOfWeek] = useState<DayOfWeek[]>(currentEra(series).daysOfWeek);
   // Only meaningful for "oneoff" — there's exactly one occurrence, so
   // changing its date just moves it directly, no era/scope question needed.
-  const [draftStartDate, setDraftStartDate] = useState(todayISO());
+  const [draftStartDate, setDraftStartDate] = useState(todayISO(series.timezone));
   const [draftDropOffTime, setDraftDropOffTime] = useState(carpool.dropOff?.time ?? "");
   const [draftPickUpTime, setDraftPickUpTime] = useState(carpool.pickUp?.time ?? "");
   const [draftStreet, setDraftStreet] = useState(carpool.destination?.street ?? "");
@@ -901,7 +901,7 @@ export function CarpoolDetail({
         if (structureChanged) {
           // A day-of-week/frequency change can never be retroactive — it
           // always takes effect starting today, same as "future" below.
-          const startDate = draftRecurrenceType === "oneoff" ? draftStartDate : todayISO();
+          const startDate = draftRecurrenceType === "oneoff" ? draftStartDate : todayISO(series.timezone);
           const result = await updateCarpoolSchedule(
             carpool.code,
             { type: draftRecurrenceType, daysOfWeek: draftRecurrenceType === "oneoff" ? undefined : draftDaysOfWeek, startDate },
@@ -912,7 +912,7 @@ export function CarpoolDetail({
         }
       } else if (structureChanged || timeChanged) {
         const startDate =
-          draftRecurrenceType === "oneoff" ? draftStartDate : occurrence ? occurrence.date : todayISO();
+          draftRecurrenceType === "oneoff" ? draftStartDate : occurrence ? occurrence.date : todayISO(series.timezone);
         const result = await updateCarpoolSchedule(
           carpool.code,
           { type: draftRecurrenceType, daysOfWeek: draftRecurrenceType === "oneoff" ? undefined : draftDaysOfWeek, startDate },
@@ -1086,7 +1086,7 @@ export function CarpoolDetail({
       const era = currentEra(series);
       const result = await updateCarpoolSchedule(
         carpool.code,
-        { type: era.type, daysOfWeek: era.type === "oneoff" ? undefined : era.daysOfWeek, startDate: todayISO() },
+        { type: era.type, daysOfWeek: era.type === "oneoff" ? undefined : era.daysOfWeek, startDate: todayISO(series.timezone) },
         leg === "dropOff" ? { time: occurrence.dropOff.time, cars } : occurrence.dropOff,
         leg === "pickUp" ? { time: occurrence.pickUp.time, cars } : occurrence.pickUp
       );
@@ -1522,7 +1522,7 @@ export function CarpoolDetail({
             <input
               type="date"
               value={draftStartDate}
-              min={todayISO()}
+              min={todayISO(series.timezone)}
               onChange={(e) => setDraftStartDate(e.target.value)}
             />
           </div>
