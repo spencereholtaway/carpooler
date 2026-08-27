@@ -214,7 +214,8 @@ function withoutSkipped(cars: Car[], skippedKids: string[] | undefined): Car[] {
 async function restampFutureOccurrences(
   store: ReturnType<typeof getStore>,
   series: CarpoolSeries,
-  era: RecurrenceEra
+  era: RecurrenceEra,
+  dropDriver?: { memberId: string; legs: { dropOff: boolean; pickUp: boolean } }
 ) {
   const today = todayISO();
   const occurrences = await listOccurrences(store, series.code);
@@ -228,9 +229,15 @@ async function restampFutureOccurrences(
       if (!occ.overridden.dropOff) {
         occ.dropOff = { time: era.defaultDropOff.time, cars: withoutSkipped(era.defaultDropOff.cars, occ.skippedKids) };
         changed = true;
+      } else if (dropDriver?.legs.dropOff && occ.dropOff.cars.some((c) => c.driverId === dropDriver.memberId)) {
+        occ.dropOff = { ...occ.dropOff, cars: occ.dropOff.cars.filter((c) => c.driverId !== dropDriver.memberId) };
+        changed = true;
       }
       if (!occ.overridden.pickUp) {
         occ.pickUp = { time: era.defaultPickUp.time, cars: withoutSkipped(era.defaultPickUp.cars, occ.skippedKids) };
+        changed = true;
+      } else if (dropDriver?.legs.pickUp && occ.pickUp.cars.some((c) => c.driverId === dropDriver.memberId)) {
+        occ.pickUp = { ...occ.pickUp, cars: occ.pickUp.cars.filter((c) => c.driverId !== dropDriver.memberId) };
         changed = true;
       }
       if (changed) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
@@ -344,11 +351,21 @@ export default async (req: Request) => {
 
   const existingIndex = carpool.members.findIndex((m) => m.id === member.id);
   const isNewJoin = existingIndex === -1;
-  const previousKids = isNewJoin ? [] : carpool.members[existingIndex].kids;
+  const previousMember = isNewJoin ? null : carpool.members[existingIndex];
+  const previousKids = previousMember?.kids ?? [];
   // Deselecting every kid you have in this carpool isn't a kids update —
   // it's you leaving. Drop the member row entirely rather than upserting an
   // empty kids array onto a row that would otherwise linger forever.
   const isLeaving = !isNewJoin && member.kids.length === 0;
+  // A leg going from "can drive" to "can't" (or the member leaving outright)
+  // means their car shouldn't exist anywhere anymore — including a date
+  // someone already hand-overrode, unlike an ordinary default change (see
+  // restampFutureOccurrences), because "not driving" isn't a preference a
+  // stale per-date override should be able to keep alive.
+  const droppedDriverLegs = {
+    dropOff: (previousMember?.canDriveDropOff ?? false) && (isLeaving || !member.canDriveDropOff),
+    pickUp: (previousMember?.canDrivePickUp ?? false) && (isLeaving || !member.canDrivePickUp),
+  };
 
   if (isLeaving) {
     dropMember(carpool, era, member.id);
@@ -423,7 +440,12 @@ export default async (req: Request) => {
   }
 
   await store.setJSON(`code:${code}`, carpool);
-  await restampFutureOccurrences(store, carpool, era);
+  await restampFutureOccurrences(
+    store,
+    carpool,
+    era,
+    droppedDriverLegs.dropOff || droppedDriverLegs.pickUp ? { memberId: member.id, legs: droppedDriverLegs } : undefined
+  );
 
   if (!isLeaving) {
     for (const m of isNewJoin ? carpool.members : [member]) {

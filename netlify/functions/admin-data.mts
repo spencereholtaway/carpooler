@@ -172,7 +172,12 @@ function withoutSkipped(cars: Car[], skippedKids: string[] | undefined): Car[] {
   return cars.map((c) => ({ ...c, kids: c.kids.filter((k) => !skip.has(k)) }));
 }
 
-async function restampEra(store: ReturnType<typeof getStore>, series: Carpool, era: RecurrenceEra) {
+async function restampEra(
+  store: ReturnType<typeof getStore>,
+  series: Carpool,
+  era: RecurrenceEra,
+  dropDriver?: { memberId: string; legs: { dropOff: boolean; pickUp: boolean } }
+) {
   const today = todayISO();
   const occurrences = await listOccurrences(store, series.code);
   await Promise.all(
@@ -184,9 +189,15 @@ async function restampEra(store: ReturnType<typeof getStore>, series: Carpool, e
       if (!occ.overridden.dropOff) {
         occ.dropOff = { time: era.defaultDropOff.time, cars: withoutSkipped(era.defaultDropOff.cars, occ.skippedKids) };
         changed = true;
+      } else if (dropDriver?.legs.dropOff && occ.dropOff.cars.some((c) => c.driverId === dropDriver.memberId)) {
+        occ.dropOff = { ...occ.dropOff, cars: occ.dropOff.cars.filter((c) => c.driverId !== dropDriver.memberId) };
+        changed = true;
       }
       if (!occ.overridden.pickUp) {
         occ.pickUp = { time: era.defaultPickUp.time, cars: withoutSkipped(era.defaultPickUp.cars, occ.skippedKids) };
+        changed = true;
+      } else if (dropDriver?.legs.pickUp && occ.pickUp.cars.some((c) => c.driverId === dropDriver.memberId)) {
+        occ.pickUp = { ...occ.pickUp, cars: occ.pickUp.cars.filter((c) => c.driverId !== dropDriver.memberId) };
         changed = true;
       }
       if (changed) await store.setJSON(`occ:${series.code}:${occ.date}`, occ);
@@ -217,9 +228,14 @@ function currentEra(series: Carpool): RecurrenceEra {
 }
 // After mutating the current era's defaults, push the change into every
 // future not-individually-overridden occurrence it governs.
-async function applyEraChange(store: ReturnType<typeof getStore>, series: Carpool, era: RecurrenceEra) {
+async function applyEraChange(
+  store: ReturnType<typeof getStore>,
+  series: Carpool,
+  era: RecurrenceEra,
+  dropDriver?: { memberId: string; legs: { dropOff: boolean; pickUp: boolean } }
+) {
   await store.setJSON(`code:${series.code}`, series);
-  await restampEra(store, series, era);
+  await restampEra(store, series, era, dropDriver);
 }
 
 function clampSeats(seats: unknown): number {
@@ -658,10 +674,18 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       if (!member) return new Response("Member not found", { status: 404 });
       const era = currentEra(carpool);
       const clamped = clampSeats(seats);
+      const turnedOff = clamped === 0 && (leg === "dropOff" ? member.canDriveDropOff : member.canDrivePickUp);
       if (leg === "dropOff") member.canDriveDropOff = clamped > 0;
       else member.canDrivePickUp = clamped > 0;
       setSeats(leg === "dropOff" ? era.defaultDropOff : era.defaultPickUp, member, clamped);
-      await applyEraChange(store, carpool, era);
+      await applyEraChange(
+        store,
+        carpool,
+        era,
+        turnedOff
+          ? { memberId, legs: { dropOff: leg === "dropOff", pickUp: leg === "pickUp" } }
+          : undefined
+      );
       return new Response("ok");
     }
     case "moveKid": {
