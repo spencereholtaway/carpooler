@@ -1703,7 +1703,14 @@ export function AdminPage() {
                     : ""}
                 </span>
               )}
-              {filterUserGroups(groupUsersByCoParent(users), householdKidSearch).map((group) => {
+              {filterUserGroups(groupUsersByCoParent(users), householdKidSearch)
+                // Only households with at least one parent already a member
+                // of this carpool — otherwise every household in the whole
+                // system shows up here, most with nothing to do with this
+                // carpool. Not the real fix (that's the kid-centric
+                // membership model, still pending), just a stopgap.
+                .filter((group) => group.some((u) => liveEditingCarpool.members.some((m) => m.id === u.memberId)))
+                .map((group) => {
                 const kids = combinedKids(group);
                 if (kids.length === 0) return null;
                 const memberIds = group.map((u) => u.memberId);
