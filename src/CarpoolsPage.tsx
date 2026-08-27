@@ -37,6 +37,15 @@ import { useTypewriter } from "./useTypewriter";
 type Row = { series: CarpoolSeries; occurrence: CarpoolOccurrence };
 type DateGroup = { date: string; heading: string; rows: Row[] };
 
+// Shown in the "Today" card when nothing's on the schedule. Picked at random
+// per render so it doesn't go stale sitting there all day.
+const TODAY_EMPTY_LINES = [
+  "All bliss, no pool - enjoy your day!",
+  "If a carpool happens but your kid isn't in it, did it even happen?",
+  "To carpool or not to carpool? Today, that's already answered.",
+  "I think, therefore I am... not driving anyone else's kids today.",
+];
+
 // Today/Tomorrow/bare-weekday for anything within the next week, then an
 // actual date once "which Saturday?" stops being obvious from context alone.
 function relativeHeading(dateISO: string): string {
@@ -135,6 +144,36 @@ function TodayCarpoolRow({
         ))}
       </div>
     </button>
+  );
+}
+
+function TodayEmptyRow({ start, onDone }: { start: boolean; onDone: () => void }) {
+  const [message] = useState(() => TODAY_EMPTY_LINES[Math.floor(Math.random() * TODAY_EMPTY_LINES.length)]);
+  const full = ` \n${message}`;
+  const { display, done } = useTypewriter(full, 30, start);
+  useEffect(() => {
+    if (done) onDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+  const [timeLine, messageLine] = display.split("\n");
+  const cursor = (atIndex: number) =>
+    atIndex === 1 ? <span className={`ai-summary-cursor ${done ? "" : "typing"}`} aria-hidden="true" /> : null;
+  return (
+    <div className="today-carpool">
+      <div className="today-carpool-empty">
+        <div className="today-carpool-header">
+          <div className="today-carpool-header-text">
+            <span className="today-carpool-time">{timeLine}</span>
+          </div>
+        </div>
+        <div className="today-carpool-summary">
+          <p>
+            {messageLine}
+            {cursor(1)}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -434,26 +473,30 @@ export function CarpoolsPage({
         </div>
       )}
 
-      {!loading && todayRows.length > 0 && (
+      {!loading && (carpools?.length ?? 0) > 0 && (
         <section className="today-summary">
-          <span className="carpool-row-meta carpool-day-label">Today</span>
-          {todayRows.map((row, i) => (
-            <TodayCarpoolRow
-              key={row.series.code}
-              row={row}
-              summary={summarizeCarpool(toCarpoolView(row.series, row.occurrence), memberId) || "Nothing arranged yet."}
-              openSeats={openSeatsFromOthers(toCarpoolView(row.series, row.occurrence), memberId)}
-              onOpen={() =>
-                onOpenCarpool(
-                  { carpool: row.series, occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [] },
-                  row.occurrence.date
-                )
-              }
-              start={i <= typedCount}
-              onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
-              showCursor={i === todayRows.length - 1}
-            />
-          ))}
+          <span className="carpool-row-meta carpool-day-label">{todayRows.length === 0 ? "No rides today" : "Today"}</span>
+          {todayRows.length === 0 ? (
+            <TodayEmptyRow start onDone={() => setTypedCount((n) => Math.max(n, 1))} />
+          ) : (
+            todayRows.map((row, i) => (
+              <TodayCarpoolRow
+                key={row.series.code}
+                row={row}
+                summary={summarizeCarpool(toCarpoolView(row.series, row.occurrence), memberId) || "Nothing arranged yet."}
+                openSeats={openSeatsFromOthers(toCarpoolView(row.series, row.occurrence), memberId)}
+                onOpen={() =>
+                  onOpenCarpool(
+                    { carpool: row.series, occurrences: occurrences?.filter((o) => o.code === row.series.code) ?? [] },
+                    row.occurrence.date
+                  )
+                }
+                start={i <= typedCount}
+                onDone={() => setTypedCount((n) => Math.max(n, i + 1))}
+                showCursor={i === todayRows.length - 1}
+              />
+            ))
+          )}
         </section>
       )}
 

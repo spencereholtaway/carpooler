@@ -1145,6 +1145,10 @@ button {
   margin: 0;
 }
 
+.today-carpool-empty {
+  opacity: 0.65;
+}
+
 @media (min-width: 900px) {
   .carpool-row-summary,
   .today-carpool-summary {
