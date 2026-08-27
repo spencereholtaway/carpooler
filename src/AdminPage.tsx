@@ -1810,7 +1810,7 @@ export function AdminPage() {
             </div>
             {legViewMode === "kid" ? (
               <LegAssignments
-                carpool={displayEditingCarpool}
+                carpool={displayEditingCarpool ?? liveEditingCarpool}
                 leg={legTab}
                 label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
                 onMoveKid={
@@ -1821,7 +1821,7 @@ export function AdminPage() {
               />
             ) : (
               <LegAssignmentsByParent
-                carpool={displayEditingCarpool}
+                carpool={displayEditingCarpool ?? liveEditingCarpool}
                 leg={legTab}
                 label={legTab === "dropOff" ? "Drop-off" : "Pick-up"}
                 onMoveKid={
