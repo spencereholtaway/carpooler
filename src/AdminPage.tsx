@@ -504,7 +504,11 @@ function LegAssignments({
 }) {
   const legData = leg === "dropOff" ? carpool.dropOff : carpool.pickUp;
   const cars = legData?.cars ?? [];
-  const drivers = carpool.members.filter((m) => (leg === "dropOff" ? m.canDriveDropOff : m.canDrivePickUp));
+  // Every member is a selectable option here, whether or not their driving
+  // toggle is on for this leg or they're the resolved default for this kid
+  // — admin needs to be able to fix a mis-assigned ride, not just confirm
+  // one that's already eligible.
+  const drivers = carpool.members;
   const allKids = Array.from(new Set(carpool.members.flatMap((m) => m.kids))).sort((a, b) =>
     a.localeCompare(b)
   );
@@ -523,7 +527,7 @@ function LegAssignments({
       {allKids.length === 0 ? (
         <p className="admin-muted">No kids in this carpool.</p>
       ) : drivers.length === 0 ? (
-        <p className="admin-muted">No one can drive {label.toLowerCase()} yet.</p>
+        <p className="admin-muted">No members in this carpool yet.</p>
       ) : (
         <table className="admin-table admin-driving-table">
           <thead>
@@ -588,20 +592,17 @@ function LegAssignmentsByParent({
   );
   const kidDefaults = computeKidDefaults(carpool.members);
   const kidToDriver = resolveKidDrivers(cars, carpool.members, kidDefaults);
-  // A card belongs here if this member is either an explicit driver (has a
-  // car in this leg, even an empty one offering seats) or is currently the
-  // resolved default driver for at least one kid — same "you're always
-  // good for your own kid" fallback the AI summary and the by-kid view
-  // already use. Filtering by the canDrive toggle alone (the old behavior)
-  // silently dropped every default-only parent from this view entirely.
-  const cardDriverIds = new Set([...cars.map((c) => c.driverId), ...kidToDriver.values()]);
-  const drivers = carpool.members.filter((m) => cardDriverIds.has(m.id));
+  // Every member gets a row here, not just an explicit driver (has a car in
+  // this leg) or the resolved default for some kid — admin needs to see and
+  // use every possible kid/parent pairing, including a parent who isn't
+  // currently driving or anyone's default, to actually fix a bad assignment.
+  const drivers = carpool.members;
 
   return (
     <div className="admin-panel-leg-assignments">
       <h4>{label} cars</h4>
       {drivers.length === 0 ? (
-        <p className="admin-muted">No one can drive {label.toLowerCase()} yet.</p>
+        <p className="admin-muted">No members in this carpool yet.</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table admin-driving-table">
@@ -1672,13 +1673,36 @@ export function AdminPage() {
 
             <div className="admin-panel-members admin-panel-household-kids">
               <h4>Kids in this carpool</h4>
-              <input
-                type="search"
-                className="admin-search-input"
-                placeholder="Search parents..."
-                value={householdKidSearch}
-                onChange={(e) => setHouseholdKidSearch(e.target.value)}
-              />
+              <div className="admin-household-kids-toolbar">
+                <input
+                  type="search"
+                  className="admin-search-input"
+                  placeholder="Search parents..."
+                  value={householdKidSearch}
+                  onChange={(e) => setHouseholdKidSearch(e.target.value)}
+                />
+                <select
+                  className="admin-occurrence-select"
+                  value={selectedOccDate}
+                  onChange={(e) => setSelectedOccDate(e.target.value)}
+                >
+                  <option value="">This week (editable)</option>
+                  {editingCarpoolOccurrences.map((o) => (
+                    <option key={o.date} value={o.date}>
+                      {o.date}
+                      {o.overridden.dropOff || o.overridden.pickUp ? " (overridden)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {viewedOccurrence && (
+                <span className="admin-occurrence-note">
+                  Read-only — showing exactly what's assigned on this date.
+                  {viewedOccurrence.skippedKids && viewedOccurrence.skippedKids.length > 0
+                    ? ` Opted out this date: ${viewedOccurrence.skippedKids.join(", ")}.`
+                    : ""}
+                </span>
+              )}
               {filterUserGroups(groupUsersByCoParent(users), householdKidSearch).map((group) => {
                 const kids = combinedKids(group);
                 if (kids.length === 0) return null;
@@ -1749,29 +1773,6 @@ export function AdminPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-
-            <div className="admin-occurrence-picker">
-              <label>
-                Viewing
-                <select value={selectedOccDate} onChange={(e) => setSelectedOccDate(e.target.value)}>
-                  <option value="">Current schedule (editable)</option>
-                  {editingCarpoolOccurrences.map((o) => (
-                    <option key={o.date} value={o.date}>
-                      {o.date}
-                      {o.overridden.dropOff || o.overridden.pickUp ? " (overridden)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {viewedOccurrence && (
-                <span className="admin-occurrence-note">
-                  Read-only — showing exactly what's assigned on this date.
-                  {viewedOccurrence.skippedKids && viewedOccurrence.skippedKids.length > 0
-                    ? ` Opted out this date: ${viewedOccurrence.skippedKids.join(", ")}.`
-                    : ""}
-                </span>
-              )}
             </div>
 
             <div className="admin-leg-tabs-row">
