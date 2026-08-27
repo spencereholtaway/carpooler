@@ -3128,7 +3128,10 @@ button {
 
 .admin-occurrence-select {
   flex: 0 0 auto;
+  width: auto;
+  max-width: 45%;
   font-size: 13px;
+  padding: 10px 32px 10px 12px;
 }
 
 .admin-household-kid-row {
