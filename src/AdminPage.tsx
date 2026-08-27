@@ -944,8 +944,13 @@ export function AdminPage() {
       setSavingCarpool(false);
     }
   };
-  const setMemberSeats = (code: string, memberId: string, leg: "dropOff" | "pickUp", seats: number) =>
-    callAdmin("setMemberSeats", { code, memberId, leg, seats });
+  const setMemberSeats = (
+    code: string,
+    memberId: string,
+    leg: "dropOff" | "pickUp",
+    seats: number,
+    date?: string
+  ) => callAdmin("setMemberSeats", { code, memberId, leg, seats, date });
   const moveKid = (code: string, leg: "dropOff" | "pickUp", kid: string, driverId: string | null) =>
     callAdmin("moveKid", { code, leg, kid, driverId });
   const deleteCarpool = async (code: string) => {
@@ -1746,6 +1751,11 @@ export function AdminPage() {
 
             <div className="admin-panel-driving">
               <h4>Who can drive</h4>
+              {viewedOccurrence && (
+                <span className="admin-occurrence-note">
+                  Editing seats for {viewedOccurrence.date} only — other dates are unaffected.
+                </span>
+              )}
               <table className="admin-table admin-driving-table">
                 <thead>
                   <tr>
@@ -1757,22 +1767,26 @@ export function AdminPage() {
                 <tbody>
                   {liveEditingCarpool.members.map((m) => {
                     const dropOffSeats =
-                      liveEditingCarpool.dropOff?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
+                      displayEditingCarpool?.dropOff?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
                     const pickUpSeats =
-                      liveEditingCarpool.pickUp?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
+                      displayEditingCarpool?.pickUp?.cars.find((c) => c.driverId === m.id)?.seats ?? 0;
                     return (
                       <tr key={m.id}>
                         <td>{m.name}</td>
                         <td>
                           <SeatStepper
                             seats={dropOffSeats}
-                            onChange={(seats) => setMemberSeats(liveEditingCarpool.code, m.id, "dropOff", seats)}
+                            onChange={(seats) =>
+                              setMemberSeats(liveEditingCarpool.code, m.id, "dropOff", seats, viewedOccurrence?.date)
+                            }
                           />
                         </td>
                         <td>
                           <SeatStepper
                             seats={pickUpSeats}
-                            onChange={(seats) => setMemberSeats(liveEditingCarpool.code, m.id, "pickUp", seats)}
+                            onChange={(seats) =>
+                              setMemberSeats(liveEditingCarpool.code, m.id, "pickUp", seats, viewedOccurrence?.date)
+                            }
                           />
                         </td>
                       </tr>

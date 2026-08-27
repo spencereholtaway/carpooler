@@ -699,18 +699,32 @@ async function handleMutation(store: ReturnType<typeof getStore>, req: Request) 
       return new Response("ok");
     }
     case "setMemberSeats": {
-      const { code, memberId, leg, seats } = body.payload as {
+      const { code, memberId, leg, seats, date } = body.payload as {
         code: string;
         memberId: string;
         leg: "dropOff" | "pickUp";
         seats: number;
+        date?: string;
       };
       const carpool = await loadSeries(store, code);
       if (!carpool) return new Response("Not found", { status: 404 });
       const member = carpool.members.find((m) => m.id === memberId);
       if (!member) return new Response("Member not found", { status: 404 });
-      const era = currentEra(carpool);
       const clamped = clampSeats(seats);
+      // A specific date is selected: scope the edit to that one occurrence
+      // instead of the recurring template, same as the member-facing app's
+      // per-date overrides — otherwise every edit here silently rewrote
+      // every future date via applyEraChange/restampEra below.
+      if (date) {
+        const occKey = `occ:${code}:${date}`;
+        const occ = (await store.get(occKey, { type: "json" })) as CarpoolOccurrence | null;
+        if (!occ) return new Response("Occurrence not found", { status: 404 });
+        setSeats(leg === "dropOff" ? occ.dropOff : occ.pickUp, member, clamped);
+        occ.overridden[leg] = true;
+        await store.setJSON(occKey, occ);
+        return new Response("ok");
+      }
+      const era = currentEra(carpool);
       const turnedOff = clamped === 0 && (leg === "dropOff" ? member.canDriveDropOff : member.canDrivePickUp);
       if (leg === "dropOff") member.canDriveDropOff = clamped > 0;
       else member.canDrivePickUp = clamped > 0;
