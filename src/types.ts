@@ -37,6 +37,14 @@ export type Address = {
   zip: string;
 };
 
+// Collapses any run of whitespace (including non-breaking spaces, which look
+// identical to a regular space but aren't caught by .trim()) down to a
+// single space, so two addresses that render identically also compare and
+// geocode identically instead of silently drifting to different map pins.
+export function normalizeAddressField(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 // Legacy shape — a Carpool used to be both the recurrence definition and the
 // only occurrence, with one `day` field and one `dropOff`/`pickUp` pair
 // shared by every future week forever. Superseded by CarpoolSeries (a

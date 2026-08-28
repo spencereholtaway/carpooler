@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { claimName, getHousehold, joinCarpool, listCarpools, setHouseholdCombined, type CarpoolResult } from "./api";
 import type { LocalProfile } from "./useProfile";
+import { normalizeAddressField } from "./types";
 import { BottomSheet } from "./BottomSheet";
 
 export function ProfileEditor({
@@ -117,8 +118,8 @@ export function ProfileEditor({
       const updated: LocalProfile = {
         name: trimmedName,
         kids,
-        street: street.trim(),
-        zip: zip.trim(),
+        street: normalizeAddressField(street),
+        zip: normalizeAddressField(zip),
       };
 
       // Keep every carpool's copy of this member's info in sync (each carpool's

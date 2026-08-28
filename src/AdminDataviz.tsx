@@ -906,47 +906,25 @@ function attachPulseGlow(
   };
 }
 
-// Nudges points that share (near-)identical coordinates apart slightly,
-// arranged in a small circle around their shared spot — purely for
-// on-map rendering. Two carpools at the same destination address (or two
-// co-parents at the same home) would otherwise produce two markers sitting
-// exactly on top of each other, so only the topmost could ever receive a
-// hover/click; every other computation in this file (distance histograms,
-// carpool sprawl, etc.) keeps using each point's real, unjittered
-// coordinates — only marker and connection-line placement reads this map.
-// A fixed lat/lon offset is the wrong unit for this: how many screen
-// pixels it renders as depends entirely on zoom, so a value tuned to look
-// right zoomed in is invisible zoomed out across a whole city (which is
-// exactly what happened — 10m is a fraction of a pixel at neighborhood
-// zoom). Leaflet's project/unproject round-trip lets the offset be
-// specified in actual screen pixels at a given zoom instead, so the
-// separation is visible regardless of scale. `zoom` should be whatever
-// the map is about to be fit to, not necessarily its current zoom.
-function jitterCoincidentPoints(map: L.Map, points: MapPoint[], zoom: number): Map<string, GeoPoint> {
+// Groups points that share the same kind and (near-)identical coordinates —
+// two co-parents at the same home, or two carpools at the same destination
+// — so they render as a single marker with every label listed in its
+// tooltip, instead of two markers sitting exactly on top of each other
+// (where only the topmost could ever receive a hover/click) or nudged
+// apart into a small circle (which used to make one shared address look
+// like two different ones on the map). Every other computation in this
+// file (distance histograms, carpool sprawl, etc.) keeps using each
+// point's own real coordinates — only marker/connection-line placement
+// and hover behavior reads these groups.
+function groupCoincidentPoints(points: MapPoint[]): MapPoint[][] {
   const groups = new Map<string, MapPoint[]>();
   for (const p of points) {
-    const key = `${p.point.lat.toFixed(5)},${p.point.lon.toFixed(5)}`;
+    const key = `${p.kind}|${p.point.lat.toFixed(5)},${p.point.lon.toFixed(5)}`;
     const group = groups.get(key);
     if (group) group.push(p);
     else groups.set(key, [p]);
   }
-  const pixelOffset = 10;
-  const display = new Map<string, GeoPoint>();
-  for (const group of groups.values()) {
-    if (group.length === 1) {
-      display.set(group[0].id, group[0].point);
-      continue;
-    }
-    const center = group[0].point;
-    const centerPx = map.project(L.latLng(center.lat, center.lon), zoom);
-    group.forEach((p, i) => {
-      const angle = (2 * Math.PI * i) / group.length;
-      const px = centerPx.add(L.point(Math.cos(angle) * pixelOffset, Math.sin(angle) * pixelOffset));
-      const ll = map.unproject(px, zoom);
-      display.set(p.id, { lat: ll.lat, lon: ll.lng });
-    });
-  }
-  return display;
+  return [...groups.values()];
 }
 
 function MapView({
@@ -1062,30 +1040,29 @@ function MapView({
 
     const byId = new Map(points.map((p) => [p.id, p]));
     const markersById = new Map<string, L.CircleMarker>();
-    // Compute the jitter for whatever zoom fitBounds is about to settle
-    // on below (same bounds, same padding) rather than the map's current
-    // zoom — those can differ by a lot on first load, which would size
-    // the pixel offset for the wrong scale.
     const fitBounds = L.latLngBounds(points.map((p) => [p.point.lat, p.point.lon]));
-    const targetZoom = map.getBoundsZoom(fitBounds, false, L.point(12, 12));
-    const displayPoint = jitterCoincidentPoints(map, points, targetZoom);
     const displayLatLng = (id: string): L.LatLng => {
-      const dp = displayPoint.get(id) ?? byId.get(id)!.point;
-      return L.latLng(dp.lat, dp.lon);
+      const p = byId.get(id)!.point;
+      return L.latLng(p.lat, p.lon);
     };
 
-    const markers = points.map((p) => {
-      const tooltip = `<strong>${escapeHtml(p.label)}</strong><br>${escapeHtml(p.address)}`;
-      const dp = displayPoint.get(p.id) ?? p.point;
-      const marker = L.circleMarker([dp.lat, dp.lon], {
+    const groups = groupCoincidentPoints(points);
+    const markers = groups.map((group) => {
+      const [first] = group;
+      const addresses = [...new Set(group.map((p) => p.address))];
+      const tooltip =
+        addresses.length === 1
+          ? `<strong>${group.map((p) => escapeHtml(p.label)).join(", ")}</strong><br>${escapeHtml(addresses[0])}`
+          : group.map((p) => `<strong>${escapeHtml(p.label)}</strong><br>${escapeHtml(p.address)}`).join("<hr>");
+      const marker = L.circleMarker([first.point.lat, first.point.lon], {
         radius: 7,
-        color: p.kind === "home" ? "#2563eb" : "#dc2626",
-        fillColor: p.kind === "home" ? "#2563eb" : "#dc2626",
+        color: first.kind === "home" ? "#2563eb" : "#dc2626",
+        fillColor: first.kind === "home" ? "#2563eb" : "#dc2626",
         fillOpacity: 0.7,
         weight: 1,
       });
       marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8] }).addTo(map);
-      markersById.set(p.id, marker);
+      for (const p of group) markersById.set(p.id, marker);
       return marker;
     });
 
@@ -1150,26 +1127,29 @@ function MapView({
       activePulses = [];
       permanentPulses.forEach(({ controller }) => controller.setDimmed(false));
     };
-    points.forEach((p) => {
-      const marker = markersById.get(p.id)!;
+    groups.forEach((group) => {
+      const marker = markersById.get(group[0].id)!;
+      const groupIds = new Set(group.map((p) => p.id));
+      const groupKind = group[0].kind;
       marker.on("mouseover", () => {
         clearLines();
-        const connectedIds = new Set(adjacency[p.id] ?? []);
+        const connectedIds = new Set(group.flatMap((p) => adjacency[p.id] ?? []));
         for (const { pointId, otherId, controller } of permanentPulses) {
           const isOwn =
-            (pointId === p.id && connectedIds.has(otherId)) || (otherId === p.id && connectedIds.has(pointId));
+            (groupIds.has(pointId) && connectedIds.has(otherId)) ||
+            (groupIds.has(otherId) && connectedIds.has(pointId));
           controller.setDimmed(!isOwn);
         }
         for (const connectedId of connectedIds) {
           const other = byId.get(connectedId);
           if (!other) continue;
-          const home = p.kind === "home" ? p : other;
-          const carpool = p.kind === "home" ? other : p;
+          const homeId = groupKind === "home" ? group[0].id : other.id;
+          const carpoolId = groupKind === "home" ? other.id : group[0].id;
           activePulses.push(
             attachPulseGlow(
               map,
-              displayLatLng(home.id),
-              displayLatLng(carpool.id),
+              displayLatLng(homeId),
+              displayLatLng(carpoolId),
               "#f59e0b",
               { holdMs: 0, fadeMs: 900, baseOpacity: 0.9, lowOpacity: 0.15, weight: 2 },
             ),
@@ -1183,30 +1163,38 @@ function MapView({
     // that carpool's tooltip open (rather than only on hover); clicking
     // the same carpool again clears both.
     let blobLayer: L.Layer | null = null;
-    let blobCarpoolId: string | null = null;
+    let blobKey: string | null = null;
+    let blobMarker: L.CircleMarker | null = null;
     const clearBlob = () => {
       blobLayer?.remove();
       blobLayer = null;
-      if (blobCarpoolId) markersById.get(blobCarpoolId)?.closeTooltip();
-      blobCarpoolId = null;
+      blobMarker?.closeTooltip();
+      blobMarker = null;
+      blobKey = null;
     };
-    points
-      .filter((p) => p.kind === "carpool")
-      .forEach((p) => {
-        const marker = markersById.get(p.id)!;
+    groups
+      .filter((group) => group[0].kind === "carpool")
+      .forEach((group) => {
+        const key = group.map((p) => p.id).sort().join("|");
+        const marker = markersById.get(group[0].id)!;
         marker.on("click", () => {
-          if (blobCarpoolId === p.id) {
+          if (blobKey === key) {
             clearBlob();
             return;
           }
           clearBlob();
-          const homePoints = (adjacency[p.id] ?? [])
-            .filter((id) => id.startsWith("home:"))
-            .map((id) => byId.get(id))
-            .filter((h): h is MapPoint => h != null);
-          if (homePoints.length === 0) return;
-          blobLayer = buildBlob(homePoints).addTo(map);
-          blobCarpoolId = p.id;
+          const homePoints = new Map<string, MapPoint>();
+          for (const p of group) {
+            for (const id of adjacency[p.id] ?? []) {
+              if (!id.startsWith("home:")) continue;
+              const h = byId.get(id);
+              if (h) homePoints.set(id, h);
+            }
+          }
+          if (homePoints.size === 0) return;
+          blobLayer = buildBlob([...homePoints.values()]).addTo(map);
+          blobKey = key;
+          blobMarker = marker;
           marker.openTooltip();
         });
       });
