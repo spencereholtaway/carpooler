@@ -1074,31 +1074,20 @@ export function CarpoolDetail({
     }
   };
 
-  // Editing the default/nearest occurrence behaves exactly like the old
-  // single-schedule app always did — the change applies today and carries
-  // forward. Navigating to view a *different*, further-out date and editing
-  // there is how the new "just this one" override gets used: no extra
-  // confirmation step, the date you're looking at already tells you the
-  // scope.
+  // Who's driving/riding always applies to just the date being looked at,
+  // never the recurring plan — seats should only ever be free because
+  // someone explicitly opened them up for that date, not because a past
+  // edit on "today" silently became everyone's new default going forward.
+  // Schedule structure (time, day-of-week) is the only thing that still
+  // goes through the era/scope machinery, via commitSave.
   const updateLegCars = async (leg: "dropOff" | "pickUp", cars: Car[]) => {
     if (!occurrence) return;
-    if (isEditingDefaultOccurrence) {
-      const era = currentEra(series);
-      const result = await updateCarpoolSchedule(
-        carpool.code,
-        { type: era.type, daysOfWeek: era.type === "oneoff" ? undefined : era.daysOfWeek, startDate: todayISO(series.timezone) },
-        leg === "dropOff" ? { time: occurrence.dropOff.time, cars } : occurrence.dropOff,
-        leg === "pickUp" ? { time: occurrence.pickUp.time, cars } : occurrence.pickUp
-      );
-      onCarpoolUpdated(result);
-    } else {
-      const fields =
-        leg === "dropOff"
-          ? { dropOff: { time: occurrence.dropOff.time, cars } }
-          : { pickUp: { time: occurrence.pickUp.time, cars } };
-      const updatedOcc = await updateOccurrence(carpool.code, occurrence.date, fields);
-      onOccurrenceUpdated(updatedOcc);
-    }
+    const fields =
+      leg === "dropOff"
+        ? { dropOff: { time: occurrence.dropOff.time, cars } }
+        : { pickUp: { time: occurrence.pickUp.time, cars } };
+    const updatedOcc = await updateOccurrence(carpool.code, occurrence.date, fields);
+    onOccurrenceUpdated(updatedOcc);
   };
 
   const applyMovePrompt = async () => {
@@ -1229,12 +1218,10 @@ export function CarpoolDetail({
                 </option>
               ))}
             </select>
-            {!isEditingDefaultOccurrence && (
-              <span className="muted">
-                Changing your "can you drive?" status here (or moving a kid between cars) only affects
-                this one date — the usual plan is untouched.
-              </span>
-            )}
+            <span className="muted">
+              Changing your "can you drive?" status here (or moving a kid between cars) only affects
+              this one date — the usual plan is untouched.
+            </span>
           </div>
         )}
         <p className="carpool-subline muted">
