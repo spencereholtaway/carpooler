@@ -618,7 +618,6 @@ export function CarpoolDetail({
   const defaultDate = pickRepresentativeOccurrence(occurrences, series.timezone)?.date;
   const [selectedDate, setSelectedDate] = useState(initialDate ?? defaultDate);
   const occurrence = occurrences.find((o) => o.date === selectedDate) ?? occurrences.find((o) => o.date === defaultDate);
-  const isEditingDefaultOccurrence = !occurrence || occurrence.date === defaultDate;
   const carpool = toCarpoolView(series, occurrence);
 
   const [copied, setCopied] = useState(false);
