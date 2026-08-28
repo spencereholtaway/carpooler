@@ -7,6 +7,7 @@ import { ProfileEditor } from "./ProfileEditor";
 import { CarpoolsPage } from "./CarpoolsPage";
 import { CarpoolDetail } from "./CarpoolDetail";
 import { AdminPage } from "./AdminPage";
+import { FeedbackBanner, useFeedbackBannerVisible } from "./FeedbackBanner";
 import type { CarpoolOccurrence, CarpoolSeries } from "./types";
 import type { CarpoolResult } from "./api";
 
@@ -60,6 +61,7 @@ function AmbientOrbs() {
 
 function App() {
   const { profile, memberId, loading, saveProfile, clearProfile, adoptMemberId } = useProfile();
+  const { visible: feedbackBannerVisible, dismiss: dismissFeedbackBanner } = useFeedbackBannerVisible();
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -164,7 +166,8 @@ function App() {
   return (
     <div className="app-shell">
       <AmbientOrbs />
-      <div className="app-shell-topper">
+      {feedbackBannerVisible && <FeedbackBanner onDismiss={dismissFeedbackBanner} />}
+      <div className={`app-shell-topper ${feedbackBannerVisible ? "app-shell-topper-with-banner" : ""}`}>
         <div className="app-shell-topper-inner app-shell-topper-inner-wide">
           <button
             type="button"
@@ -195,7 +198,11 @@ function App() {
           </div>
         </div>
       </div>
-      <main className={`app-shell-main ${wide ? "app-shell-main-wide" : ""}`}>
+      <main
+        className={`app-shell-main ${wide ? "app-shell-main-wide" : ""} ${
+          feedbackBannerVisible ? "app-shell-main-with-banner" : ""
+        }`}
+      >
         {selectedCarpool ? (
           <CarpoolDetail
             series={selectedCarpool}

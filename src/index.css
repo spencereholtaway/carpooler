@@ -45,6 +45,8 @@
   /* Rendered height of the fixed .app-shell-topper — single source of
      truth so nothing has to re-derive or guess it. */
   --topper-h: 84px;
+  /* Rendered height of the fixed .feedback-banner, when shown. */
+  --banner-h: 36px;
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --serif: "Fraunces", Georgia, serif;
@@ -786,6 +788,54 @@ button {
   animation: float-in 0.7s var(--ease-smooth) both;
 }
 
+.app-shell-topper-with-banner {
+  top: var(--banner-h);
+}
+
+.feedback-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: var(--banner-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+}
+
+.feedback-banner-text a {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+.feedback-banner-close {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.8;
+}
+
+.feedback-banner-close:hover {
+  opacity: 1;
+}
+
 .app-shell-topper-inner {
   display: flex;
   align-items: baseline;
@@ -888,6 +938,10 @@ button {
      rendered height or content starts underneath it. Left/right padding is
      0 here on mobile since #root already carries 16px of its own. */
   padding: var(--topper-h) 0 64px;
+}
+
+.app-shell-main-with-banner {
+  padding-top: calc(var(--topper-h) + var(--banner-h));
 }
 
 @media (min-width: 900px) {
